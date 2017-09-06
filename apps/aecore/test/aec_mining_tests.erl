@@ -14,6 +14,7 @@ mine_block_test_() ->
     {foreach,
      fun() ->
              application:start(crypto),
+             aec_tx_pool:start_link(),
              meck:new(aec_blocks, [passthrough]),
              meck:new(aec_pow_sha256, [passthrough]),
              meck:new(aec_tx, [passthrough])
@@ -55,5 +56,4 @@ mine_block_test_() ->
        end}
      ]
     }.
-
 -endif.

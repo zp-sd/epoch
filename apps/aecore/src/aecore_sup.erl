@@ -28,5 +28,11 @@ init([]) ->
                                   permanent,
                                   5000,
                                   worker,
-                                  [aec_peers]}
+                                  [aec_peers]},
+                                 {tx_pool,
+                                  {aec_tx_pool, start_link, []},
+                                  permanent,
+                                  5000,
+                                  worker,
+                                  [aec_tx_pool]}
                                 ]} }.
