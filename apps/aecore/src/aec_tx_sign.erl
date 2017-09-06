@@ -8,7 +8,7 @@
 -include("txs.hrl").
 
 data(SignedTx) ->
-    SignedTx#signed_tx.data.
+    SignedTx#signed_tx.feed_tx.
 
 verify(failed_tx) ->
     %% TODO: Verify signed txs

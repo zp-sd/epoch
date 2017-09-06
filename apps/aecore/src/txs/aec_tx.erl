@@ -22,12 +22,18 @@ apply_signed([], Trees, _Height) ->
 apply_signed([SignedTx | Rest], Trees0, Height) ->
     case aec_tx_sign:verify(SignedTx) of
         ok ->
-            Tx = aec_tx_sign:data(SignedTx),
-            case apply_single(Tx, Trees0, Height) of
-                {ok, Trees} ->
-                    apply_signed(Rest, Trees, Height);
-                {error, _Reason} = Error ->
-                    Error
+            FeedTx = aec_tx_sign:data(SignedTx),
+            case aec_tx_fee:check(FeedTx) of
+                ok ->
+                    Tx = aec_tx_fee:tx(FeedTx),
+                    case apply_single(Tx, Trees0, Height) of
+                        {ok, Trees} ->
+                            apply_signed(Rest, Trees, Height);
+                        {error, _Reason} = Error ->
+                            Error
+                    end
+                %{error, _Reason} = Error->
+                %    Error
             end;
         {error, _Reason} = Error ->
             Error
@@ -36,7 +42,7 @@ apply_signed([SignedTx | Rest], Trees0, Height) ->
 
 %% Internal functions
 
--spec apply_single(coinbase_tx(), trees(), non_neg_integer()) -> {ok, trees()} | {error, term()}.
+-spec apply_single(tx(), trees(), non_neg_integer()) -> {ok, trees()} | {error, term()}.
 apply_single(#coinbase_tx{} = Tx, Trees, Height) ->
     aec_coinbase_tx:run(Tx, Trees, Height);
 apply_single(_Other, _Trees_, _Height) ->

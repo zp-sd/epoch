@@ -48,9 +48,9 @@ mine(Block, Attempts) ->
 
 -spec get_txs_to_mine(trees()) -> list(signed_tx()).
 get_txs_to_mine(Trees) ->
-    {ok, Txs0} = aec_tx_pool:all(),
+    Txs0 = aec_tx_pool:all(),
     {ok, CoinbaseTx} = create_coinbase_tx(Trees),
-    {ok, SignedCoinbaseTx} = aec_keys:sign(CoinbaseTx),
+    {ok, SignedCoinbaseTx} = aec_keys:sign(#feed_tx{tx=CoinbaseTx, fee=0}),
     [SignedCoinbaseTx | Txs0].
 
 -spec create_coinbase_tx(trees()) -> {ok, coinbase_tx()}.

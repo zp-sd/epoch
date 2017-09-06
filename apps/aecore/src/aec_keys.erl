@@ -13,4 +13,4 @@ pubkey() ->
 sign(Tx) ->
     %% TODO: Return signed tx
     %% If only one signature needed for a tx, signatures list will contain only one item
-    {ok, #signed_tx{data = Tx, signatures = []}}.
+    {ok, #signed_tx{feed_tx = Tx, signatures = []}}.
