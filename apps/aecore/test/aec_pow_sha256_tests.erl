@@ -20,14 +20,16 @@ pow_test_() ->
      [{"Fail if retry count is zero",
        fun() ->
                %% succeeds in a single step
-               ?assertEqual({error, generation_count_exhausted}, ?TEST_MODULE:generate(<<"hello there">>, 5555, 0))
+               Data = aec_sha256:hash(<<"hello there">>),
+               ?assertEqual({error, generation_count_exhausted, 1}, ?TEST_MODULE:generate(Data, 5555, 0))
        end},
       {"Generate with very large difficulty",
        fun() ->
                ?assertEqual(1, ?TEST_MODULE:pick_nonce()),
                %% succeeds in a single step
+               Data = aec_sha256:hash(<<"hello there">>),
                BigDiff = 256*256 + 255 + 1,
-               ?assertEqual({ok, 1}, ?TEST_MODULE:generate(<<"hello there">>, BigDiff, 1))
+               ?assertEqual({ok, 1}, ?TEST_MODULE:generate(Data, BigDiff, 1))
        end}
      ]
     }.

@@ -51,12 +51,6 @@ mine_block_test_() ->
 
                ?assertEqual({error, generation_count_exhausted}, ?TEST_MODULE:mine())
        end},
-      {"Cannot apply signed tx",
-       fun() ->
-               meck:expect(aec_tx, apply_signed, 3, {error, tx_failed}),
-
-               ?assertEqual({error, tx_failed}, ?TEST_MODULE:mine())
-       end},
       {"For good mining speed mine block with the same difficulty",
        fun() ->
                Trees = #trees{accounts = [#account{pubkey = <<"pubkey">>}]},

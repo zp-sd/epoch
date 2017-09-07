@@ -16,7 +16,7 @@
 
 %% API
 
--spec apply_signed(list(signed_tx()), trees(), non_neg_integer()) -> {ok, trees()} | {error, term()}.
+-spec apply_signed(list(signed_tx()), trees(), non_neg_integer()) -> {ok, trees()}.
 apply_signed([], Trees, _Height) ->
     {ok, Trees};
 apply_signed([SignedTx | Rest], Trees0, Height) ->
@@ -27,7 +27,8 @@ apply_signed([SignedTx | Rest], Trees0, Height) ->
                 {ok, Trees} ->
                     apply_signed(Rest, Trees, Height);
                 {error, _Reason} = Error ->
-                    Error
+                    lager:warning("Applying tx ~p failed with an error: ~p", [Tx, Error]),
+                    apply_signed(Rest, Trees0, Height)
             end;
         {error, _Reason} = Error ->
             Error

@@ -9,6 +9,8 @@
 -include("txs.hrl").
 
 -define(DEFAULT_MINE_ATTEMPTS_COUNT, 10).
+-define(ATTEMPTS_BATCH_SIZE, 10000).
+-define(TIME_DELTA_TO_FETCH_NEW_TXS, 30000). %% 30 seconds
 
 %% API
 
@@ -21,35 +23,20 @@ mine(Attempts) ->
     {ok, LastBlock} = aec_blocks:top(),
     Trees = aec_blocks:trees(LastBlock),
     Txs = get_txs_to_mine(Trees),
-    case aec_blocks:new(LastBlock, Txs, Trees) of
-        {ok, Block0} ->
-            Block = maybe_recalculate_difficulty(Block0),
-            case mine(Block, Attempts) of
-                {ok, _Block} = Ok ->
-                    Ok;
-                {error, _Reason} = Error ->
-                    Error
-            end;
+    {ok, Block0} = aec_blocks:new(LastBlock, Txs, Trees),
+    Block = maybe_recalculate_difficulty(Block0),
+    case mine(Block, Attempts) of
+        {ok, _Block} = Ok ->
+            Ok;
         {error, _Reason} = Error ->
             Error
     end.
 
-
 %% Internal functions
-
--spec mine(block(), non_neg_integer()) -> {ok, block()} | {error, term()}.
-mine(Block, Attempts) ->
-    Difficulty = aec_blocks:difficulty(Block),
-    case aec_pow_sha256:generate(Block, Difficulty, Attempts) of
-        {ok, Nonce} ->
-            {ok, aec_blocks:set_nonce(Block, Nonce)};
-        {error, generation_count_exhausted} = Error ->
-            Error
-    end.
 
 -spec get_txs_to_mine(trees()) -> list(signed_tx()).
 get_txs_to_mine(Trees) ->
-    {ok, Txs0} = aec_tx_pool:all(),
+    {ok, Txs0} = aec_tx_pool:get_txs_to_mine(),
     {ok, CoinbaseTx} = create_coinbase_tx(Trees),
     {ok, SignedCoinbaseTx} = aec_keys:sign(CoinbaseTx),
     [SignedCoinbaseTx | Txs0].
@@ -104,3 +91,79 @@ mining_rate_between_blocks(Block1Header, Block2Header, BlocksMinedCount) ->
     Time2 = aec_headers:time_in_secs(Block2Header),
     TimeDiff = Time1 - Time2,
     TimeDiff div BlocksMinedCount.
+
+
+-spec mine(block(), non_neg_integer()) -> {ok, block()} | {error, term()}.
+mine(Block, Attempts) ->
+    BlockTime = aec_blocks:time(Block),
+    TimeDeltaToFetchNewTxs = application:get_env(epoch, time_delta_to_fetch_new_txs, ?TIME_DELTA_TO_FETCH_NEW_TXS),
+    NextTxsFetchTime = BlockTime + TimeDeltaToFetchNewTxs,
+    BlockHash = aec_sha256:hash(Block),
+    mine(Block, BlockHash, random, NextTxsFetchTime, TimeDeltaToFetchNewTxs, Attempts).
+
+-spec mine(block(), binary(), non_neg_integer() | random, non_neg_integer(), non_neg_integer(), non_neg_integer()) ->
+                  {ok, block()} | {error, term()}.
+mine(_Block, _BlockHash, _Nonce, _NextTxsFetchTime, _TimeDeltaToFetchNewTxs, 0) ->
+    {error, generation_count_exhausted};
+mine(Block, BlockHash, Nonce0, _NextTxsFetchTime, _TimeDeltaToFetchNewTxs, Attempts)
+  when Attempts < ?ATTEMPTS_BATCH_SIZE ->
+    case generate_pow(Block, BlockHash, Nonce0, Attempts) of
+        {ok, Nonce} ->
+            {ok, aec_blocks:set_nonce(Block, Nonce)};
+        {error, generation_count_exhausted, _Nonce} ->
+            {error, generation_count_exhausted}
+    end;
+mine(Block0, BlockHash0, Nonce0, NextTxsFetchTime0, TimeDeltaToFetchNewTxs, Attempts) ->
+    case generate_pow(Block0, BlockHash0, Nonce0, Attempts) of
+        {ok, Nonce} ->
+            {ok, aec_blocks:set_nonce(Block0, Nonce)};
+        {error, generation_count_exhausted, Nonce} ->
+            {ok, {Block, BlockHash, NewNonce, NextTxsFetchTime}} =
+                maybe_add_more_txs_to_block(Block0, BlockHash0, Nonce,
+                                            NextTxsFetchTime0, TimeDeltaToFetchNewTxs),
+            mine(Block, BlockHash, NewNonce,
+                 NextTxsFetchTime, TimeDeltaToFetchNewTxs, Attempts - ?ATTEMPTS_BATCH_SIZE)
+    end.
+
+-spec generate_pow(block(), binary(), non_neg_integer() | random, non_neg_integer()) ->
+                          {ok, integer()} | {error, generation_count_exhausted}.
+generate_pow(Block, BlockHash, random, Attempts) ->
+    Difficulty = aec_blocks:difficulty(Block),
+    aec_pow_sha256:generate(BlockHash, Difficulty, Attempts);
+generate_pow(Block, BlockHash, Nonce, Attempts) ->
+    Difficulty = aec_blocks:difficulty(Block),
+    aec_pow_sha256:generate(BlockHash, Difficulty, Nonce, Attempts).
+
+-spec maybe_add_more_txs_to_block(block(), binary(), non_neg_integer() | random, non_neg_integer(), non_neg_integer()) ->
+                                         {ok, {block(), binary(), non_neg_integer() | random, non_neg_integer()}}.
+maybe_add_more_txs_to_block(Block0, BlockHash0, Nonce0, NextTxsFetchTime0, TimeDeltaToFetchNewTxs) ->
+    case should_try_to_fetch_new_txs(NextTxsFetchTime0) of
+        true ->
+            NextTxFetchTime = NextTxsFetchTime0 + TimeDeltaToFetchNewTxs,
+            {ok, {Block, BlockHash, Nonce}} = add_more_txs_to_block(Block0, BlockHash0, Nonce0),
+            {ok, {Block, BlockHash, Nonce, NextTxFetchTime}};
+        false ->
+            {ok, {Block0, BlockHash0, Nonce0, NextTxsFetchTime0}}
+    end.
+
+-spec should_try_to_fetch_new_txs(non_neg_integer()) -> boolean().
+should_try_to_fetch_new_txs(NextTxsFetchTime) ->
+    aeu_time:now_in_msecs() > NextTxsFetchTime.
+
+-spec add_more_txs_to_block(block(), binary(), non_neg_integer() | random) ->
+                                   {ok, {block(), binary(), non_neg_integer() | random}}.
+add_more_txs_to_block(Block, BlockHash, Nonce) ->
+    case aec_tx_pool:has_pending_txs() of
+        true ->
+            {ok, {NewBlock, NewBlockHash}} = apply_pending_txs(Block),
+            {ok, {NewBlock, NewBlockHash, random}};
+        false ->
+            {ok, {Block, BlockHash, Nonce}}
+    end.
+
+-spec apply_pending_txs(block()) -> {ok, {block(), binary()}}.
+apply_pending_txs(Block) ->
+    {ok, Txs} = aec_tx_pool:get_pending_txs(),
+    {ok, NewBlock} = aec_blocks:apply_additional_txs(Block, Txs),
+    NewBlockHash = aec_sha256:hash(NewBlock),
+    {ok, {NewBlock, NewBlockHash}}.

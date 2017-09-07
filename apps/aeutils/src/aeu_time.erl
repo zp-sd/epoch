@@ -2,7 +2,8 @@
 
 %% API
 -export([now_in_msecs/0,
-         msecs_to_secs/1]).
+         msecs_to_secs/1,
+         secs_to_msecs/1]).
 
 now_in_msecs() ->
     {Megasecs, Secs, Microsecs} = os:timestamp(),
@@ -10,3 +11,6 @@ now_in_msecs() ->
 
 msecs_to_secs(Msecs) ->
     Msecs div 1000.
+
+secs_to_msecs(Secs) ->
+    Secs * 1000.
