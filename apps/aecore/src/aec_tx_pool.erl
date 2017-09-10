@@ -12,6 +12,7 @@
 -export([all/0,
          clear/0,
          add/1,
+         remove/1,
          get_iterator/0]).
 
 %% gen_server callbacks
@@ -64,6 +65,19 @@ add(SignedTx) ->
     end.
 
 %%------------------------------------------------------------------------------
+%% Remove transaction or a list of transactions from mempool.
+%% Usecase: We received a new block and we want to remove transactions from that block from our pending set.
+%%------------------------------------------------------------------------------
+-spec remove(signed_tx() | list(signed_tx())) -> ok.
+remove([]) ->
+    ok;
+remove(List) when is_list(List) ->
+    gen_server:cast(?MODULE, {remove, List}),
+    ok;
+remove(SignedTx) ->
+    remove([SignedTx]).
+
+%%------------------------------------------------------------------------------
 %% Returns gb_tree iterator to current state of mempool - current list of transactions
 %%------------------------------------------------------------------------------
 -spec get_iterator() -> list(gb_trees:iter(non_pos_integer(), signed_tx())).
@@ -76,8 +90,8 @@ get_iterator() ->
 
 -type non_pos_integer() :: neg_integer() | 0.
 
--record(state, {pool :: gb_trees:gb_trees(non_pos_integer(), signed_tx())}).
-%The tree Key is -fee (zero minus fee)
+-record(state, {pool :: gb_trees:tree(binary(), signed_tx())}).
+%The tree Key is -fee (zero minus fee) in binary 64bit + Tx hash
 
 start_link() ->
     gen_server:start_link({local, ?MODULE} ,?MODULE, ok, []).
@@ -95,10 +109,12 @@ handle_cast(clear, State) ->
     {noreply, State#state{pool=gb_trees:empty()}};
 
 handle_cast({add, SignedTx}, State) ->
-    MinusFee = 0-aec_tx_fee:fee(aec_tx_sign:data(SignedTx)),
-    Hash = aec_tx:hash(SignedTx),
-    Key = <<MinusFee:64,Hash/binary>>,
+    Key = get_tx_key(SignedTx),
     NewPool = gb_trees:enter(Key, SignedTx, State#state.pool),
+    {noreply, State#state{pool=NewPool}};
+
+handle_cast({remove, List}, State) ->
+    NewPool = remove_txs_from_set(List, State#state.pool),
     {noreply, State#state{pool=NewPool}}.
 
 handle_info(_Info, State) ->
@@ -111,3 +127,16 @@ code_change(_OldVsn, State, _Extra) ->
 %%%=============================================================================
 %%% Internal functions
 %%%=============================================================================
+
+-spec get_tx_key(signed_tx()) -> binary().
+get_tx_key(SignedTx) ->
+    MinusFee = 0-aec_tx_fee:fee(aec_tx_sign:data(SignedTx)),
+    Hash = aec_tx:hash(SignedTx),
+    <<MinusFee:64,Hash/binary>>.
+
+-spec remove_txs_from_set(list(signed_tx()), gb_trees:tree(binary(), signed_tx())) -> gb_trees:tree(binary(), signed_tx()).
+remove_txs_from_set([], GbTree) ->
+    GbTree;
+remove_txs_from_set([Tx | RestTxs], GbTree) ->
+    NewGbTree = gb_trees:delete(get_tx_key(Tx), GbTree),
+    remove_txs_from_set(RestTxs, NewGbTree).
