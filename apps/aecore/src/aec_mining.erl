@@ -46,11 +46,11 @@ mine(Block, Attempts) ->
             Error
     end.
 
--spec get_txs_to_mine(trees()) -> list(signed_tx()).
+-spec get_txs_to_mine(trees()) -> list(full_tx()).
 get_txs_to_mine(Trees) ->
     Txs0 = aec_tx_pool:all(),
     {ok, CoinbaseTx} = create_coinbase_tx(Trees),
-    {ok, SignedCoinbaseTx} = aec_keys:sign(#feed_tx{tx=CoinbaseTx, fee=0}),
+    {ok, SignedCoinbaseTx} = aec_keys:sign(#full_tx{tx=CoinbaseTx, fee=0}),
     [SignedCoinbaseTx | Txs0].
 
 -spec create_coinbase_tx(trees()) -> {ok, coinbase_tx()}.

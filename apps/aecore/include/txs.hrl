@@ -1,12 +1,8 @@
--record(signed_tx, {
-          feed_tx         :: feed_tx(),
+-record(full_tx, {
+          tx              :: tx(),
+          fee             :: non_neg_integer(),
           signatures = [] :: list(binary())}).
--type(signed_tx() :: #signed_tx{}).
-
--record(feed_tx, {
-         tx  :: tx(),
-         fee :: non_neg_integer()}).
--type(feed_tx() :: #feed_tx{}).
+-type(full_tx() :: #full_tx{}).
 
 %% Basic transactions
 

@@ -33,7 +33,7 @@
 %%------------------------------------------------------------------------------
 %% Returns list of all transactions. Ordered from highest to lowest fee.
 %%------------------------------------------------------------------------------
--spec all() -> list(signed_tx()).
+-spec all() -> list(full_tx()).
 all() ->
     gen_server:call(?MODULE, all).
 
@@ -48,18 +48,12 @@ clear() ->
 %%------------------------------------------------------------------------------
 %% Verify and add transaction to mempool. Performs only signature and fee verification
 %%------------------------------------------------------------------------------
--spec add(signed_tx()) -> ok | {error, string()}.
-add(SignedTx) ->
-    case aec_tx_sign:verify(SignedTx) of  %TODO export this codeblock to an function. used also in aec_tx
+-spec add(full_tx()) -> ok | {error, string()}.
+add(FullTx) ->
+    case aec_tx_sign:verify(FullTx) of
         ok ->
-            FeedTx = aec_tx_sign:data(SignedTx),
-            case aec_tx_fee:check(FeedTx) of
-                ok ->
-                    gen_server:cast(?MODULE, {add, SignedTx}),
-                    ok
-                %{error, _Reason} = Error->
-                %    Error
-            end;
+            gen_server:cast(?MODULE, {add, FullTx}),
+            ok;
         {error, _Reason} = Error ->
             Error
     end.
@@ -68,19 +62,19 @@ add(SignedTx) ->
 %% Remove transaction or a list of transactions from mempool.
 %% Usecase: We received a new block and we want to remove transactions from that block from our pending set.
 %%------------------------------------------------------------------------------
--spec remove(signed_tx() | list(signed_tx())) -> ok.
+-spec remove(full_tx() | list(full_tx())) -> ok.
 remove([]) ->
     ok;
 remove(List) when is_list(List) ->
     gen_server:cast(?MODULE, {remove, List}),
     ok;
-remove(SignedTx) ->
-    remove([SignedTx]).
+remove(FullTx) ->
+    remove([FullTx]).
 
 %%------------------------------------------------------------------------------
 %% Returns gb_tree iterator to current state of mempool - current list of transactions
 %%------------------------------------------------------------------------------
--spec get_iterator() -> list(gb_trees:iter(non_pos_integer(), signed_tx())).
+-spec get_iterator() -> list(gb_trees:iter(non_pos_integer(), full_tx())).
 get_iterator() ->
     gen_server:call(?MODULE, get_iterator).
 
@@ -90,7 +84,7 @@ get_iterator() ->
 
 -type non_pos_integer() :: neg_integer() | 0.
 
--record(state, {pool :: gb_trees:tree(binary(), signed_tx())}).
+-record(state, {pool :: gb_trees:tree(binary(), full_tx())}).
 %The tree Key is -fee (zero minus fee) in binary 64bit + Tx hash
 
 start_link() ->
@@ -108,9 +102,9 @@ handle_call(get_iterator, _From, State) ->
 handle_cast(clear, State) ->
     {noreply, State#state{pool=gb_trees:empty()}};
 
-handle_cast({add, SignedTx}, State) ->
-    Key = get_tx_key(SignedTx),
-    NewPool = gb_trees:enter(Key, SignedTx, State#state.pool),
+handle_cast({add, FullTx}, State) ->
+    Key = get_tx_key(FullTx),
+    NewPool = gb_trees:enter(Key, FullTx, State#state.pool),
     {noreply, State#state{pool=NewPool}};
 
 handle_cast({remove, List}, State) ->
@@ -128,13 +122,13 @@ code_change(_OldVsn, State, _Extra) ->
 %%% Internal functions
 %%%=============================================================================
 
--spec get_tx_key(signed_tx()) -> binary().
-get_tx_key(SignedTx) ->
-    MinusFee = 0-aec_tx_fee:fee(aec_tx_sign:data(SignedTx)),
-    Hash = aec_tx:hash(SignedTx),
+-spec get_tx_key(full_tx()) -> binary().
+get_tx_key(FullTx) ->
+    MinusFee = 0-aec_tx_full:fee(aec_tx_sign:data(FullTx)),
+    Hash = aec_tx:hash(FullTx),
     <<MinusFee:64,Hash/binary>>.
 
--spec remove_txs_from_set(list(signed_tx()), gb_trees:tree(binary(), signed_tx())) -> gb_trees:tree(binary(), signed_tx()).
+-spec remove_txs_from_set(list(full_tx()), gb_trees:tree(binary(), full_tx())) -> gb_trees:tree(binary(), full_tx()).
 remove_txs_from_set([], GbTree) ->
     GbTree;
 remove_txs_from_set([Tx | RestTxs], GbTree) ->

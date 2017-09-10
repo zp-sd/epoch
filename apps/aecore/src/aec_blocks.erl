@@ -35,7 +35,7 @@ top() ->
     %% and transform it to #block{} record
     {ok, #block{}}.
 
--spec new(block(), list(signed_tx()), trees()) -> {ok, block()} | {error, term()}.
+-spec new(block(), list(full_tx()), trees()) -> {ok, block()} | {error, term()}.
 new(LastBlock, Txs, Trees0) ->
     LastBlockHeight = height(LastBlock),
     LastBlockDifficulty = difficulty(LastBlock),

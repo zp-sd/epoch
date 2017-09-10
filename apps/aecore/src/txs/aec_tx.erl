@@ -17,32 +17,26 @@
 
 %% API
 
--spec apply_signed(list(signed_tx()), trees(), non_neg_integer()) -> {ok, trees()} | {error, term()}.
+-spec apply_signed(list(full_tx()), trees(), non_neg_integer()) -> {ok, trees()} | {error, term()}.
 apply_signed([], Trees, _Height) ->
     {ok, Trees};
-apply_signed([SignedTx | Rest], Trees0, Height) ->
-    case aec_tx_sign:verify(SignedTx) of
+apply_signed([FullTx | Rest], Trees0, Height) ->
+    case aec_tx_full:verify(FullTx) of
         ok ->
-            FeedTx = aec_tx_sign:data(SignedTx),
-            case aec_tx_fee:check(FeedTx) of
-                ok ->
-                    Tx = aec_tx_fee:tx(FeedTx),
-                    case apply_single(Tx, Trees0, Height) of
-                        {ok, Trees} ->
-                            apply_signed(Rest, Trees, Height);
-                        {error, _Reason} = Error ->
-                            Error
-                    end
-                %{error, _Reason} = Error->
-                %    Error
+            Tx=aec_tx_full:tx(FullTx),
+            case apply_single(Tx, Trees0, Height) of
+                {ok, Trees} ->
+                    apply_signed(Rest, Trees, Height);
+                {error, _Reason} = Error ->
+                    Error
             end;
         {error, _Reason} = Error ->
             Error
     end.
 
--spec hash(signed_tx()) -> binary().
-hash(_SignedTx) ->
-    <<0:8>>. %TODO implement, we need tx serialization for that, then we can do it like: crypto:hash(sha256,SerializedSignedTx).
+-spec hash(full_tx()) -> binary().
+hash(_FullTx) ->
+    <<0:8>>. %TODO implement, we need tx serialization for that, then we can do it like: crypto:hash(sha256,SerializedFullTx).
 
 %% Internal functions
 
