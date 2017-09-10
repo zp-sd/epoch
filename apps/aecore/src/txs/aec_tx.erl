@@ -1,6 +1,7 @@
 -module(aec_tx).
 
--export([apply_signed/3]).
+-export([apply_signed/3,
+         hash/1]).
 
 -include("common.hrl").
 -include("trees.hrl").
@@ -39,6 +40,9 @@ apply_signed([SignedTx | Rest], Trees0, Height) ->
             Error
     end.
 
+-spec hash(signed_tx()) -> binary().
+hash(_SignedTx) ->
+    <<0:8>>. %TODO implement, we need tx serialization for that, then we can do it like: crypto:hash(sha256,SerializedSignedTx).
 
 %% Internal functions
 

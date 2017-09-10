@@ -96,7 +96,9 @@ handle_cast(clear, State) ->
 
 handle_cast({add, SignedTx}, State) ->
     MinusFee = 0-aec_tx_fee:fee(aec_tx_sign:data(SignedTx)),
-    NewPool = gb_trees:enter(MinusFee, SignedTx, State#state.pool),
+    Hash = aec_tx:hash(SignedTx),
+    Key = <<MinusFee:64,Hash/binary>>,
+    NewPool = gb_trees:enter(Key, SignedTx, State#state.pool),
     {noreply, State#state{pool=NewPool}}.
 
 handle_info(_Info, State) ->
@@ -109,4 +111,3 @@ code_change(_OldVsn, State, _Extra) ->
 %%%=============================================================================
 %%% Internal functions
 %%%=============================================================================
-
