@@ -2,6 +2,42 @@
 %%% @copyright (C) 2017, Aeternity Anstalt
 %%% @doc Service holding the chain of block headers and blocks.
 %%%
+%%% This service:
+%%% * Holds one chain of block headers from the genesis block;
+%%% * Ensures the held chain of block headers is a chain, i.e. it
+%%%   checks block header fields "previous hash" and "height" are
+%%%   consistent before amending the stored chain;
+%%% * Is capable of holding blocks associated to any held block
+%%%   headers i.e. it does not necessarily hold the full block of each
+%%%   block header in the chain.  It holds the full block of genesis.
+%%%
+%%% This service does *not*:
+%%% * Hold any block headers outside of the held chain.  Headers
+%%%   outside of the held chain may be present in the underlying
+%%%   storage layer in case of preceding abnormal termination of the
+%%%   service;
+%%% * Hold any full block outside of the held chain.  Blocks outside
+%%%   of the held chain may be present in the underlying storage layer
+%%%   in case of preceding abnormal termination of the service.
+%%%
+%%% The underlying storage layer consists of three key-value stores:
+%%% * Block headers - stored by block header hash;
+%%% * Blocks - stored by block header hash;
+%%% * Chains, each represented by the hash of its heighest block
+%%%   header.  This store includes only one key i.e. only one chain.
+%%%
+%%% The service is needed in order to:
+%%% * Expose a consistent view of a chain while minimizing the number
+%%%   of block headers and blocks held;
+%%%   * Removing this need would require:
+%%%     * Never deleting block headers and blocks;
+%%%     * A thread-safe underlying storage layer (e.g. RocksDB);
+%%%     * Sorted storage of multiple chains.
+%%% * Ease closing the underlying storage layes (e.g. it is unsafe to
+%%%   close RocksDB while another thread is issuing read or write
+%%%   requests - see
+%%%   https://github.com/facebook/rocksdb/wiki/RocksDB-FAQ ).
+%%%
 %%% @TODO Unit testing of unhappy paths.
 %%% @TODO Forced chain (fork).
 %%% @TODO Persistence.
