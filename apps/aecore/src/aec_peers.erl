@@ -14,7 +14,8 @@
          info/1,
          all/0,
          get_random/0,
-         uri_from_ip_port/2]).
+         uri_from_ip_port/2,
+         uri/1]).
 
 %% gen_server callbacks
 -export([start_link/0, init/1, handle_call/3, handle_cast/2, 
@@ -87,11 +88,18 @@ get_random() ->
 uri_from_ip_port(IP, Port) ->
     "http://" ++ IP ++ ":" ++ integer_to_list(Port) ++ "/".
 
+%%------------------------------------------------------------------------------
+%% Get uri of peer
+%%------------------------------------------------------------------------------
+-spec uri(peer()) -> http_uri:uri().
+uri(Peer) ->
+    Peer#peer.uri.
+
 %%%=============================================================================
 %%% gen_server functions
 %%%=============================================================================
 
--record(state, {peers :: gb_trees:gb_tree(binary(),peer())}).
+-record(state, {peers :: gb_trees:tree(binary(),peer())}).
 
 start_link() ->
     gen_server:start_link({local, ?MODULE} ,?MODULE, ok, []).

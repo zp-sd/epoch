@@ -38,19 +38,21 @@
 
 -record(top_state,
         {top_header :: header(),
-         top_header_db :: dict:dict(
-                            ?TOP_HEADER, %% Only one key.
-                            block_header_hash()),
+         top_header_db :: top_header_db(),
          top_block :: aec_blocks:block_deserialized_from_network()}). %% Without state trees.
--record(state,
-        {top :: #top_state{},
-         headers_db :: dict:dict(
-                         block_header_hash(),
-                         aec_headers:block_header_serialized_for_network()),
-         blocks_db :: dict:dict(
-                        block_header_hash(),
-                        aec_blocks:block_serialized_for_network())}). %% Without state trees.
+-record(state, {top :: #top_state{},
+                headers_db :: headers_db(),
+                blocks_db :: blocks_db()}).
 
+-type top_header_db() :: dict:dict(
+                           ?TOP_HEADER, %% Only one key.
+                           header_hash()).
+-type headers_db() :: dict:dict(
+                        header_hash(),
+                        header_binary()).
+-type blocks_db() :: dict:dict(
+                       header_hash(),
+                       aec_blocks:block_serialized_for_network()). %% Without state trees.
 %%%===================================================================
 %%% API
 %%%===================================================================
@@ -89,18 +91,22 @@ top_block() ->
     gen_server:call(?SERVER, {top_block},
                     ?DEFAULT_CALL_TIMEOUT).
 
+-spec get_header_by_hash(header_hash()) -> do_get_header_by_hash_reply().
 get_header_by_hash(HeaderHash) ->
     gen_server:call(?SERVER, {get_header_by_hash, HeaderHash},
                     ?DEFAULT_CALL_TIMEOUT).
 
+-spec get_block_by_hash(header_hash()) -> do_get_block_by_hash_reply().
 get_block_by_hash(HeaderHash) ->
     gen_server:call(?SERVER, {get_block_by_hash, HeaderHash},
                     ?DEFAULT_CALL_TIMEOUT).
 
+-spec get_header_by_height(height()) -> do_get_header_by_height_reply().
 get_header_by_height(Height) ->
     gen_server:call(?SERVER, {get_header_by_height, Height},
                     ?DEFAULT_CALL_TIMEOUT).
 
+-spec get_block_by_height(height()) -> do_get_block_by_height_reply().
 get_block_by_height(Height) ->
     gen_server:call(?SERVER, {get_block_by_height, Height},
                     ?DEFAULT_CALL_TIMEOUT).
@@ -136,7 +142,7 @@ init(_Args = [GenesisBlock]) ->
     %% Compute initial state of process.
     {ok, TopHeaderHash} = top_header_db_get(NewTopHeaderDb, ?TOP_HEADER),
     {ok, SerializedTopHeader} = headers_db_get(NewHeadersDb, TopHeaderHash),
-    {ok, TopHeader} = aec_headers:deserialize_from_network(SerializedTopHeader),
+    {ok, TopHeader} = aec_headers:deserialize_from_binary(SerializedTopHeader),
     {ok, SerializedTopBlock} = blocks_db_get(NewBlocksDb, TopHeaderHash),
     {ok, TopBlock} = aec_blocks:deserialize_from_network(SerializedTopBlock),
     TopState = #top_state{top_header = TopHeader,
@@ -156,12 +162,16 @@ handle_call({top_block}, _From, State) ->
 handle_call({get_header_by_hash,
              HeaderHash = <<_:?BLOCK_HEADER_HASH_BYTES/unit:8>>},
             _From, State) ->
-    Reply = do_get_header_by_hash(HeaderHash, State#state.headers_db),
+    Reply = do_get_header_by_hash(HeaderHash,
+                                  State#state.top#top_state.top_header,
+                                  State#state.headers_db),
     {reply, Reply, State};
 handle_call({get_block_by_hash,
              HeaderHash = <<_:?BLOCK_HEADER_HASH_BYTES/unit:8>>},
             _From, State) ->
-    Reply = do_get_block_by_hash(HeaderHash, State#state.blocks_db),
+    Reply = do_get_block_by_hash(HeaderHash,
+                                 State#state.top#top_state.top_header,
+                                 State#state.blocks_db),
     {reply, Reply, State};
 handle_call({get_header_by_height, Height}, _From, State)
   when is_integer(Height), Height >= 0 ->
@@ -273,11 +283,10 @@ do_init([GenesisBlock], TopHeaderDb, _HeadersDb, _BlocksDb) ->
     {ok, SerializedGenesisBlock} =
         aec_blocks:serialize_for_network(GenesisBlock),
     {ok, SerializedGenesisHeader} =
-        aec_headers:serialize_for_network(
+        aec_headers:serialize_to_binary(
           aec_blocks:to_header(GenesisBlock)),
     {ok, GenesisHeaderHash} =
-        aec_headers:hash_network_serialization(
-          SerializedGenesisHeader),
+        aec_blocks:hash_internal_representation(GenesisBlock),
 
     %% Initialize databases.
     {NewTopHeaderDb, NewHeadersDb, NewBlocksDb} =
@@ -324,7 +333,7 @@ do_init([GenesisBlock], TopHeaderDb, _HeadersDb, _BlocksDb) ->
 
 do_find_genesis_header_from_header_hash(HeaderHash, HeadersDb) ->
     {ok, SerializedHeader} = headers_db_get(HeadersDb, HeaderHash),
-    {ok, Header} = aec_headers:deserialize_from_network(SerializedHeader),
+    {ok, Header} = aec_headers:deserialize_from_binary(SerializedHeader),
     case aec_headers:height(Header) of
         0 ->
             {ok, SerializedHeader};
@@ -335,33 +344,49 @@ do_find_genesis_header_from_header_hash(HeaderHash, HeadersDb) ->
 
 do_find_genesis_header_from_header_hash(HeaderHash, Height = 0, HeadersDb) ->
     {ok, SerializedHeader} = headers_db_get(HeadersDb, HeaderHash),
-    {ok, Header} = aec_headers:deserialize_from_network(SerializedHeader),
+    {ok, Header} = aec_headers:deserialize_from_binary(SerializedHeader),
     {Height, _} = {aec_headers:height(Header), Header},
     {ok, SerializedHeader};
 do_find_genesis_header_from_header_hash(HeaderHash, Height, HeadersDb) ->
     {ok, SerializedHeader} = headers_db_get(HeadersDb, HeaderHash),
-    {ok, Header} = aec_headers:deserialize_from_network(SerializedHeader),
+    {ok, Header} = aec_headers:deserialize_from_binary(SerializedHeader),
     {Height, _} = {aec_headers:height(Header), Header},
     do_find_genesis_header_from_header_hash(
       aec_headers:prev_hash(Header), Height - 1, HeadersDb).
 
-do_get_header_by_hash(HeaderHash, HeadersDb) ->
+-type do_get_header_by_hash_reply() ::
+        {ok, header()} |
+        {error, Reason::{header_not_found, Details::{top_header, header()}}}.
+-spec do_get_header_by_hash(header_hash(), header(), headers_db()) ->
+                                   do_get_header_by_hash_reply().
+do_get_header_by_hash(HeaderHash, TopHeader, HeadersDb) ->
     case headers_db_get(HeadersDb, HeaderHash) of
         {ok, SerializedHeader} ->
             {ok, _Header} =
-                aec_headers:deserialize_from_network(SerializedHeader);
+                aec_headers:deserialize_from_binary(SerializedHeader);
         {error, not_found} ->
-            {error, header_not_found}
+            {error, {header_not_found, {top_header, TopHeader}}}
     end.
 
-do_get_block_by_hash(HeaderHash, BlocksDb) ->
+-type do_get_block_by_hash_reply() ::
+        {ok, header()} |
+        {error, Reason::{block_not_found, Details::{top_header, header()}}}.
+-spec do_get_block_by_hash(header_hash(), header(), blocks_db()) ->
+                                  do_get_block_by_hash_reply().
+do_get_block_by_hash(HeaderHash, TopHeader, BlocksDb) ->
     case blocks_db_get(BlocksDb, HeaderHash) of
         {ok, SerializedBlock} ->
             {ok, _Block} = aec_blocks:deserialize_from_network(SerializedBlock);
         {error, not_found} ->
-            {error, block_not_found}
+            {error, {block_not_found, {top_header, TopHeader}}}
     end.
 
+-type do_get_header_by_height_reply() ::
+        {ok, header()} |
+        {error, Reason::{chain_too_short, Details::{{chain_height, height()},
+                                                    {top_header, header()}}}}.
+-spec do_get_header_by_height(height(), header(), headers_db()) ->
+                                     do_get_header_by_height_reply().
 do_get_header_by_height(Height, TopHeader, HeadersDb) ->
     ChainHeight = aec_headers:height(TopHeader),
     if
@@ -382,7 +407,7 @@ do_get_past_header(Distance, CurrentHeader, HeadersDb)
     {ok, SerializedPreviousHeader} = %% If not found, database is corrupt: fail.
         headers_db_get(HeadersDb, PreviousHeaderHash),
     {ok, PreviousHeader} =
-        aec_headers:deserialize_from_network(SerializedPreviousHeader),
+        aec_headers:deserialize_from_binary(SerializedPreviousHeader),
     case Distance of
         1 ->
             {ok, PreviousHeader};
@@ -390,12 +415,20 @@ do_get_past_header(Distance, CurrentHeader, HeadersDb)
             do_get_past_header(Distance - 1, PreviousHeader, HeadersDb)
     end.
 
+-type do_get_block_by_height_reply() ::
+        {ok, block()} |
+        {error, Reason::{chain_too_short, Details::{{chain_height, height()},
+                                                    {top_header, header()}}} |
+                        {block_not_found, {top_header, header()}}
+        }.
+-spec do_get_block_by_height(height(), header(), headers_db(), blocks_db()) ->
+                                    do_get_block_by_height_reply().
 do_get_block_by_height(Height, TopHeader, HeadersDb, BlocksDb) ->
     case do_get_header_by_height(Height, TopHeader, HeadersDb) of
         {error, {chain_too_short, _}} = Err ->
             Err;
         {ok, Header} ->
-            {ok, HeaderHash} = aec_headers:hash_internal_representation(Header),
+            {ok, HeaderHash} = aec_headers:hash_header(Header),
             case blocks_db_get(BlocksDb, HeaderHash) of
                 {ok, SerializedBlock} ->
                     {ok, _Block} =
@@ -406,7 +439,7 @@ do_get_block_by_height(Height, TopHeader, HeadersDb, BlocksDb) ->
     end.
 
 do_insert_header(Header, TopHeader, TopHeaderDb, HeadersDb) ->
-    {ok, TopHeaderHash} = aec_headers:hash_internal_representation(TopHeader),
+    {ok, TopHeaderHash} = aec_headers:hash_header(TopHeader),
     case aec_headers:prev_hash(Header) of
         TopHeaderHash ->
             TopHeaderHeight = aec_headers:height(TopHeader),
@@ -418,9 +451,9 @@ do_insert_header(Header, TopHeader, TopHeaderDb, HeadersDb) ->
                     %% storing header, the top header hash still
                     %% refers to a a chain.
                     {ok, SerializedHeader} =
-                        aec_headers:serialize_for_network(Header),
+                        aec_headers:serialize_to_binary(Header),
                     {ok, HeaderHash} =
-                        aec_headers:hash_network_serialization(SerializedHeader),
+                        aec_headers:hash_header(Header),
                     {ok, NewHeadersDb} =
                         headers_db_put(HeadersDb, HeaderHash, SerializedHeader),
                     {ok, NewTopHeaderDb} =
@@ -438,9 +471,7 @@ do_insert_header(Header, TopHeader, TopHeaderDb, HeadersDb) ->
 
 do_write_block(Block, TopHeader, TopBlock, HeadersDb, BlocksDb) ->
     Header = aec_blocks:to_header(Block),
-    {ok, SerializedHeader} = aec_headers:serialize_for_network(Header),
-    {ok, HeaderHash} = aec_headers:hash_network_serialization(
-                         SerializedHeader),
+    {ok, HeaderHash} = aec_headers:hash_header(Header),
     case do_find_header_hash_in_chain(HeaderHash, TopHeader, HeadersDb) of
         {error, not_found} ->
             {error, {header_not_in_chain, {top_header, TopHeader}}};
@@ -482,7 +513,7 @@ do_write_block(Block, TopHeader, TopBlock, HeadersDb, BlocksDb) ->
     end.
 
 do_find_header_hash_in_chain(HeaderHashToFind, TopHeader, HeadersDb) ->
-    {ok, TopHeaderHash} = aec_headers:hash_internal_representation(TopHeader),
+    {ok, TopHeaderHash} = aec_headers:hash_header(TopHeader),
     TopHeaderHeight = aec_headers:height(TopHeader),
     if
         HeaderHashToFind =:= TopHeaderHash ->
@@ -498,7 +529,7 @@ do_find_header_hash_in_chain_1(HeaderHashToFind, HeaderHashToFind, _) ->
     ok;
 do_find_header_hash_in_chain_1(HeaderHashToFind, HeaderHash, HeadersDb) ->
     {ok, SerializedHeader} = headers_db_get(HeadersDb, HeaderHash),
-    {ok, Header} = aec_headers:deserialize_from_network(SerializedHeader),
+    {ok, Header} = aec_headers:deserialize_from_binary(SerializedHeader),
     case aec_headers:height(Header) of
         0 ->
             {error, not_found};
