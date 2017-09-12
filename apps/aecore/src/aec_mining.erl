@@ -23,7 +23,7 @@ mine(Attempts) ->
     Txs = get_txs_to_mine(Trees),
     case aec_blocks:new(LastBlock, Txs, Trees) of
         {ok, Block0} ->
-            Block = maybe_recalculate_difficulty(Block0),
+            Block = maybe_recalculate_difficulty(Block0, LastBlock),
             case mine(Block, Attempts) of
                 {ok, _Block} = Ok ->
                     Ok;
@@ -60,15 +60,15 @@ create_coinbase_tx(Trees) ->
     {ok, CoinbaseTx} = aec_coinbase_tx:new(#{account => Pubkey}, Trees),
     {ok, CoinbaseTx}.
 
--spec maybe_recalculate_difficulty(block()) -> block().
-maybe_recalculate_difficulty(Block) ->
+-spec maybe_recalculate_difficulty(block(), block()) -> block().
+maybe_recalculate_difficulty(Block, PreviousBlock) ->
     Height = aec_blocks:height(Block),
     case should_recalculate_difficulty(Height) of
         true ->
             %% Recalculate difficulty based on mining rate of N last blocks,
             %% where N = recalculate_difficulty_frequency.
             BlocksToCheckCount = aec_governance:recalculate_difficulty_frequency(),
-            Difficulty = calculate_difficulty(Block, BlocksToCheckCount),
+            Difficulty = calculate_difficulty(Block, PreviousBlock, BlocksToCheckCount),
             Block#block{difficulty = Difficulty};
         false ->
             Block
@@ -81,20 +81,20 @@ should_recalculate_difficulty(Height) ->
                     (Height > RecalculateDifficultyFrequency)
         andalso (0 == (Height rem RecalculateDifficultyFrequency)).
 
--spec calculate_difficulty(block(), pos_integer()) -> non_neg_integer().
-calculate_difficulty(NewBlock, BlocksToCheckCount) ->
+-spec calculate_difficulty(block(), block(), pos_integer()) -> non_neg_integer().
+calculate_difficulty(NewBlock, PreviousBlock, BlocksToCheckCount) ->
     CurrentDifficulty = NewBlock#block.difficulty,
-    CurrentRate = get_current_rate(NewBlock, BlocksToCheckCount),
+    CurrentRate = get_current_rate(NewBlock, PreviousBlock, BlocksToCheckCount),
     ExpectedRate = aec_governance:expected_block_mine_rate(),
     aec_pow_sha256:recalculate_difficulty(CurrentDifficulty, ExpectedRate, CurrentRate).
 
--spec get_current_rate(block(), pos_integer()) -> non_neg_integer().
-get_current_rate(Block, BlocksToCheckCount) ->
+-spec get_current_rate(block(), block(), pos_integer()) -> non_neg_integer().
+get_current_rate(Block, PreviousBlock, BlocksToCheckCount) ->
     BlockHeader = aec_blocks:to_header(Block),
     BlockHeight = aec_blocks:height(Block),
 
     FirstBlockHeight = BlockHeight - BlocksToCheckCount,
-    {ok, FirstBlockHeader} = aec_chain:get_header_by_height(FirstBlockHeight), %% TODO: Ensure height refers to correct chain when we have support for longest chain.
+    {ok, FirstBlockHeader} = aec_chain:get_header_by_height_in_chain(FirstBlockHeight, TODO),
 
     mining_rate_between_blocks(BlockHeader, FirstBlockHeader, BlocksToCheckCount).
 
