@@ -50,12 +50,18 @@ paths:
       tags:
         - external
       operationId: GetBlock 
-      description: 'Get the top block'
+      description: 'Get the block by hash'
       consumes:
         - application/json
       produces:
         - application/json
-      parameters: []
+      parameters:
+        - in: query
+          name: BlockHash
+          schema:
+            type: string
+          required: true
+          description: Block Hash of the block to get
       responses:
         '200':
           description: top block
