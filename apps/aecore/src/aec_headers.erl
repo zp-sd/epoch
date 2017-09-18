@@ -8,7 +8,7 @@
          deserialize_from_map/1,
          serialize_to_binary/1,
          deserialize_from_binary/1,
-         hash_header/1]).
+         hash/1]).
 
 -include("common.hrl").
 -include("blocks.hrl").
@@ -71,7 +71,7 @@ serialize_to_binary(H) ->
 deserialize_from_binary(B) ->
     deserialize_from_map(jsx:decode(B, [return_maps])).
 
--spec hash_header(header()) -> {ok, header_hash()}.
-hash_header(H) ->
+-spec hash(header()) -> {ok, block_header_hash()}.
+hash(H) ->
     BinaryH = serialize_to_binary(H),
     {ok, aec_sha256:hash(BinaryH)}.

@@ -18,7 +18,7 @@ handle_request('GetTop', _, _Context) ->
 
 handle_request('GetBlock', _, _Context) ->
     {ok, Block} = aec_chain:top_block(),
-    {ok, Resp} = aec_blocks:serialize_for_network(Block),
+    {ok, Resp} = aec_blocks:serialize_to_map(Block),
     {200, [], Resp};
 
 handle_request('PutBlock', _, _Context) ->

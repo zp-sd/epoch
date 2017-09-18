@@ -8,16 +8,19 @@
          set_nonce/2,
          new/3,
          to_header/1,
-         serialize_for_network/1,
-         deserialize_from_network/1,
-         hash_internal_representation/1]).
+         serialize_to_binary/1,
+         deserialize_from_binary/1,
+         serialize_to_map/1,
+         deserialize_from_map/1,
+         hash/1]).
 
 -ifdef(TEST).
 -compile(export_all).
 -endif.
 
--export_type([block_serialized_for_network/0,
-              block_deserialized_from_network/0]).
+-export_type([serialized_to_binary/0,
+              serialized_to_map/0]).
+
 
 -include("common.hrl").
 -include("blocks.hrl").
@@ -25,8 +28,9 @@
 
 -define(CURRENT_BLOCK_VERSION, 1).
 
--type block_serialized_for_network() :: binary().
--type block_deserialized_from_network() :: #block{trees :: DummyTrees::trees()}.
+-type serialized_to_binary() :: binary().
+-type serialized_to_map() :: map().
+-type block_deserialized() :: #block{trees :: DummyTrees::trees()}.
 
 prev_hash(Block) ->
     Block#block.prev_hash.
@@ -46,7 +50,7 @@ set_nonce(Block, Nonce) ->
 -spec new(block(), list(signed_tx()), trees()) -> {ok, block()} | {error, term()}.
 new(LastBlock, Txs, Trees0) ->
     LastBlockHeight = height(LastBlock),
-    {ok, LastBlockHeaderHash} = hash_internal_representation(LastBlock),
+    {ok, LastBlockHeaderHash} = hash(LastBlock),
     Height = LastBlockHeight + 1,
     case aec_tx:apply_signed(Txs, Trees0, Height) of
         {ok, Trees} ->
@@ -78,22 +82,48 @@ to_header(#block{height = Height,
             time = Time,
             version = Version}.
 
--spec serialize_for_network(BlockInternalRepresentation) ->
-                                   {ok, block_serialized_for_network()} when
-      BlockInternalRepresentation :: block()
-                                   | block_deserialized_from_network().
-serialize_for_network(B = #block{}) ->
-    %% TODO: Define serialization format.
-    DummyTrees = #trees{},
-    {ok, term_to_binary(B#block{trees = DummyTrees})}.
+-spec serialize_to_map(block() | block_deserialized) -> {ok, serialized_to_map()}.
+serialize_to_map(B) ->
+    Serialized =
+      #{<<"height">> => height(B),
+        <<"prev-hash">> => base64:encode(prev_hash(B)),
+        <<"root-hash">> => base64:encode(B#block.root_hash),
+        <<"difficulty">> => B#block.difficulty,
+        <<"nonce">> => B#block.nonce,
+        <<"time">> => B#block.time,
+        <<"version">> => B#block.version,
+        <<"txs">> => [] %TODO txs serialization
+      },
+    {ok, Serialized}.
 
--spec deserialize_from_network(block_serialized_for_network()) ->
-                                      {ok, block_deserialized_from_network()}.
-deserialize_from_network(B) when is_binary(B) ->
-    %% TODO: Define serialization format.
-    DummyTrees = #trees{},
-    {ok, #block{trees = DummyTrees} = binary_to_term(B)}.
+-spec deserialize_from_map(map()) -> {ok, block_deserialized()}.
+deserialize_from_map(B) ->
+    #{<<"height">> := Height,
+      <<"prev-hash">> := PrevHash,
+      <<"root-hash">> := RootHash,
+      <<"difficulty">> := Difficulty,
+      <<"nonce">> := Nonce,
+      <<"time">> := Time,
+      <<"version">> := Version,
+      <<"txs">> := _Txs %TODO txs deserialization
+      } = B,
+    {ok, #block{height = Height,
+                prev_hash = base64:decode(PrevHash),
+                root_hash = base64:decode(RootHash),
+                difficulty = Difficulty,
+                nonce = Nonce,
+                time = Time,
+                version = Version}}.
 
--spec hash_internal_representation(block()) -> {ok, header_hash()}.
-hash_internal_representation(B = #block{}) ->
-    aec_headers:hash_header(to_header(B)).
+-spec serialize_to_binary(block() | block_deserialized()) -> {ok, serialized_to_binary()}.
+serialize_to_binary(B) ->
+    {ok, Map} = serialize_to_map(B),
+    {ok, jsx:encode(Map)}.
+
+-spec deserialize_from_binary(serialized_to_binary()) -> {ok, block_deserialized()}.
+deserialize_from_binary(B) ->
+    deserialize_from_map(jsx:decode(B, [return_maps])).    
+
+-spec hash(block()) -> {ok, block_header_hash()}.
+hash(B) ->
+    aec_headers:hash(to_header(B)).

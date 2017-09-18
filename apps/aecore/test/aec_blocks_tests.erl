@@ -18,7 +18,7 @@ new_block_test_() ->
              {ok, NewBlock} = ?TEST_MODULE:new(PrevBlock, [], #trees{}),
 
              ?assertEqual(12, ?TEST_MODULE:height(NewBlock)),
-             ?assertEqual(aec_headers:hash_header(BlockHeader),
+             ?assertEqual(aec_headers:hash(BlockHeader),
                           {ok, ?TEST_MODULE:prev_hash(NewBlock)}),
              ?assertEqual([], NewBlock#block.txs),
              ?assertEqual(17, NewBlock#block.difficulty),
@@ -28,10 +28,10 @@ new_block_test_() ->
 
 network_serialization_test() ->
     Block = #block{trees = #trees{accounts = foo}},
-    {ok, SerializedBlock} = ?TEST_MODULE:serialize_for_network(Block),
+    {ok, SerializedBlock} = ?TEST_MODULE:serialize_to_binary(Block),
     {ok, DeserializedBlock} =
-        ?TEST_MODULE:deserialize_from_network(SerializedBlock),
+        ?TEST_MODULE:deserialize_from_binary(SerializedBlock),
     ?assertEqual(Block#block{trees = #trees{}}, DeserializedBlock),
     ?assertEqual({ok, SerializedBlock},
-                 ?TEST_MODULE:serialize_for_network(DeserializedBlock)).
+                 ?TEST_MODULE:serialize_to_binary(DeserializedBlock)).
 -endif.
