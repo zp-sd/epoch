@@ -3,6 +3,9 @@
 %% API
 -export([prev_hash/1,
          height/1,
+         nonce/1,
+         target/1,
+         difficulty/1,
          time_in_secs/1,
          serialize_to_map/1,
          deserialize_from_map/1,
@@ -20,6 +23,15 @@ prev_hash(Header) ->
 height(Header) ->
     Header#header.height.
 
+nonce(Header) ->
+    Header#header.nonce.
+
+target(Header) ->
+    Header#header.target.
+
+difficulty(Header) ->
+    aec_pow:target_to_difficulty(target(Header)).
+
 time_in_secs(Header) ->
     Time = Header#header.time,
     aeu_time:msecs_to_secs(Time).
@@ -30,7 +42,7 @@ serialize_to_map(H = #header{}) ->
       #{<<"height">> =>  height(H),
         <<"prev-hash">> => base64:encode(prev_hash(H)),
         <<"root-hash">> => base64:encode(H#header.root_hash),
-        <<"difficulty">> => H#header.difficulty,
+        <<"target">> => H#header.target,
         <<"nonce">> => H#header.nonce,
         <<"time">> => H#header.time,
         <<"version">> => H#header.version
@@ -42,7 +54,7 @@ deserialize_from_map(H = #{}) ->
       #{<<"height">> := Height,
         <<"prev-hash">> := PrevHash,
         <<"root-hash">> := RootHash,
-        <<"difficulty">> := Difficulty,
+        <<"target">> := Target,
         <<"nonce">> := Nonce,
         <<"time">> := Time,
         <<"version">> := Version 
@@ -50,7 +62,7 @@ deserialize_from_map(H = #{}) ->
     {ok, #header{height = Height,
                  prev_hash = base64:decode(PrevHash),
                  root_hash = base64:decode(RootHash),
-                 difficulty = Difficulty,
+                 target = Target,
                  nonce = Nonce,
                  time = Time,
                  version = Version}}.
@@ -71,7 +83,7 @@ serialize_to_binary(H) ->
 deserialize_from_binary(B) ->
     deserialize_from_map(jsx:decode(B, [return_maps])).
 
--spec hash_header(header()) -> {ok, header_hash()}.
+-spec hash_header(header()) -> {ok, block_header_hash()}.
 hash_header(H) ->
     BinaryH = serialize_to_binary(H),
     {ok, aec_sha256:hash(BinaryH)}.
