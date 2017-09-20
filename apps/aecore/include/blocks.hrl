@@ -5,10 +5,11 @@
 -define(GENESIS_HEIGHT, 0).
 
 -define(BLOCK_HEADER_HASH_BYTES, 32).
--define(TXS_HASH_BYTES, 32). %% TODO Use this macro.
+-define(TXS_HASH_BYTES, 32).
 -define(STATE_HASH_BYTES, 32).
 
 -type(block_header_hash() :: <<_:(?BLOCK_HEADER_HASH_BYTES*8)>>).
+-type(transaction_hash() :: <<_:(?TXS_HASH_BYTES*8)>>).
 -type(state_hash() :: <<_:(?STATE_HASH_BYTES*8)>>).
 
 -record(block, {
@@ -17,6 +18,7 @@
           root_hash = <<0:?STATE_HASH_BYTES/unit:8>> :: state_hash(), % Hash of all state Merkle trees included in #block.trees
           trees = #trees{}        :: trees(),
           txs = []                :: list(),
+          txs_hash = <<0:?TXS_HASH_BYTES/unit:8>> :: transaction_hash(),
           target = ?HIGHEST_TARGET_SCI :: aec_pow:sci_int(),
           nonce = 0               :: non_neg_integer(),
           time = 0                :: non_neg_integer(),
@@ -28,6 +30,7 @@
           height = 0              :: height(),
           prev_hash = <<0:?BLOCK_HEADER_HASH_BYTES/unit:8>> :: block_header_hash(),
           root_hash = <<>>        :: binary(),
+          txs_hash = <<0:?TXS_HASH_BYTES/unit:8>> :: transaction_hash(),
           target = ?HIGHEST_TARGET_SCI :: aec_pow:sci_int(),
           nonce = 0               :: non_neg_integer(),
           time = 0                :: non_neg_integer(),

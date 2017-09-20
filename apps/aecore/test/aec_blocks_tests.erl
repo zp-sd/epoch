@@ -9,11 +9,15 @@
 
 -define(TEST_MODULE, aec_blocks).
 
+-define(TEST_HASH, <<12345:?TXS_HASH_BYTES/unit:8>>).
+
+
 new_block_test_() ->
     {setup,
      fun() ->
              meck:new(aec_trees, [passthrough]),
-             meck:expect(aec_trees, all_trees_hash, 1, <<>>)
+             meck:expect(aec_trees, all_trees_hash, 1, <<>>),
+             meck:expect(aec_trees, root_hash, fun(_) -> {ok, ?TEST_HASH} end)
      end,
      fun(_) ->
              ?assert(meck:validate(aec_trees)),
@@ -30,6 +34,7 @@ new_block_test_() ->
               ?assertEqual(aec_sha256:hash(BlockHeader),
                            ?TEST_MODULE:prev_hash(NewBlock)),
               ?assertEqual([], NewBlock#block.txs),
+              ?assertEqual(?TEST_HASH, NewBlock#block.txs_hash),
               ?assertEqual(17, NewBlock#block.target),
               ?assertEqual(1, NewBlock#block.version)
       end}}.
@@ -49,5 +54,10 @@ hash_test() ->
         aec_headers:serialize_for_network(?TEST_MODULE:to_header(Block)),
     ?assertEqual({ok, aec_sha256:hash(SerializedHeader)},
                  ?TEST_MODULE:hash_internal_representation(Block)).
+
+create_state_tree() ->
+    {ok, AccountsTree} = aec_accounts:empty(),
+    StateTrees0 = #trees{},
+    aec_trees:set_accounts(StateTrees0, AccountsTree).
 
 -endif.

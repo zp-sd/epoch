@@ -44,7 +44,7 @@ target(Block) ->
 difficulty(Block) ->
     aec_pow:target_to_difficulty(target(Block)).
 
-%% Sets the evidence of PoW,too,  for Cuckoo Cycle
+%% Sets the evidence of PoW, too, for Cuckoo Cycle
 set_nonce(Block, Nonce, Evd) ->
     Block#block{nonce = Nonce,
                 pow_evidence = Evd}.
@@ -56,14 +56,21 @@ new(LastBlock, Txs, Trees0) ->
     Height = LastBlockHeight + 1,
     case aec_tx:apply_signed(Txs, Trees0, Height) of
         {ok, Trees} ->
-            {ok, #block{height = Height,
-                        prev_hash = LastBlockHeaderHash,
-                        root_hash = aec_trees:all_trees_hash(Trees),
-                        trees = Trees,
-                        txs = Txs,
-                        target = target(LastBlock),
-                        time = aeu_time:now_in_msecs(),
-                        version = ?CURRENT_BLOCK_VERSION}};
+            TxsTrees = aec_txs_trees:new(Txs),
+            case aec_txs_trees:root_hash(TxsTrees) of
+                {ok, TxsRootHash} ->
+                    {ok, #block{height = Height,
+                                prev_hash = LastBlockHeaderHash,
+                                root_hash = aec_trees:all_trees_hash(Trees),
+                                trees = Trees,
+                                txs = Txs,
+                                txs_hash = TxsRootHash,
+                                target = target(LastBlock),
+                                time = aeu_time:now_in_msecs(),
+                                version = ?CURRENT_BLOCK_VERSION}};
+                {error, _} = Error ->
+                    Error
+            end;
         {error, _Reason} = Error ->
             Error
     end.
@@ -72,6 +79,7 @@ new(LastBlock, Txs, Trees0) ->
 to_header(#block{height = Height,
                  prev_hash = PrevHash,
                  root_hash = RootHash,
+                 txs_hash = TxsHash,
                  target = Target,
                  nonce = Nonce,
                  time = Time,
@@ -80,6 +88,7 @@ to_header(#block{height = Height,
     #header{height = Height,
             prev_hash = PrevHash,
             root_hash = RootHash,
+            txs_hash = TxsHash,
             target = Target,
             nonce = Nonce,
             time = Time,

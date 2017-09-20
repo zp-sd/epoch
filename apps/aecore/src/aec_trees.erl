@@ -15,6 +15,15 @@
          root_hash/1,
          verify_proof/4]).
 
+-type tree() :: gb_merkle_trees:tree().
+-type hash() :: gb_merkle_trees:hash().
+-type proof() :: gb_merkle_trees:merkle_proof().
+
+-export_type([tree/0,
+              hash/0,
+              proof/0]).
+
+
 all_trees_new() ->
     {ok, A} = new(),
     {ok, #trees{accounts = A}}.
