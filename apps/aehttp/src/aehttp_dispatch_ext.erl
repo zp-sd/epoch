@@ -19,7 +19,7 @@ handle_request('GetTop', _, _Context) ->
 handle_request('GetBlock', Req, _Context) ->
     Hash = maps:get('BlockHash', Req),
     {ok, Block} = aec_chain:get_block_by_hash(aeu_hex:hex_to_bin(Hash)),
-    {ok, Resp} = aec_blocks:serialize_to_map(Block),
+    {ok, Resp} = aec_blocks:serialize_for_network(Block),
     {200, [], Resp};
 
 handle_request('PutBlock', Req, _Context) ->

@@ -24,9 +24,9 @@ ping(Peer) ->
 -spec top(aec_peers:peer()) -> response(aec_headers:header()).
 top(Peer) ->
     Response = process_request(Peer, get, "top"),
-    case Response of 
-        {ok, Map} ->
-            {ok, Header} = aec_headers:deserialize_from_map(Map),
+    case Response of
+        {ok, Data} ->
+            {ok, Header} = aec_headers:deserialize_from_network(Data),
             {ok, Header};
         {error, _Reason} = Error ->
             Error
@@ -36,9 +36,9 @@ top(Peer) ->
 block(Peer, Hash) ->
     HexHash = aeu_hex:bin_to_hex(Hash),
     Response = process_request(Peer, get, "block?BlockHash="++HexHash),
-    case Response of 
-        {ok, Map} ->
-            Block = aec_blocks:deserialize_from_map(Map),
+    case Response of
+        {ok, Data} ->
+            Block = aec_blocks:deserialize_from_network(Data),
             {ok, Block};
         {error, _Reason} = Error ->
             Error
@@ -49,7 +49,7 @@ block(Peer, Hash) ->
 %send_block(Peer, Block) ->
 %    BlockSerialized = aec_blocks:serialize_for_network(Block),
 %    Response = process_request(Peer, post, "block", BlockSerialized),
-%    case Response of 
+%    case Response of
 %        {ok, _Map} ->
 %            {ok, ok};
 %        {error, _Reason} = Error ->
@@ -59,7 +59,9 @@ block(Peer, Hash) ->
 
 %% Internal functions
 
--spec process_request(aec_peers:peer(), get, string()) -> response(map()).
+-spec process_request(aec_peers:peer(), get, string()) ->
+			     response(B) when
+      B :: aec_blocks:block_serialized_for_network().
 process_request(Peer, get, Request) ->
     URL = aec_peers:uri(Peer) ++ "v1/" ++ Request,
     Header = [],
@@ -68,27 +70,25 @@ process_request(Peer, get, Request) ->
     R = httpc:request(get, {URL, Header}, HTTPOptions, Options),
     case R of
         {ok, {{_,_ReturnCode, _State}, _Head, Body}} ->
-            Result = jsx:decode(list_to_binary(Body), [return_maps]),
-            {ok, Result};
+            {ok, Body};
         {error, _Reason} ->
             {error, "A problem occured"}  %TODO investigate responses and make errors meaningfull
     end.
 
--spec process_request(aec_peers:peer(), post, string(), map()) -> response(map()).
-process_request(Peer, post, Request, Map) ->
-    URL = aec_peers:uri(Peer) ++ "v1/" ++ Request,
-    Header = [],
-    Type = "application/json",
-    Body = jsx:encode(Map),
-    HTTPOptions = [],
-    Options = [],
-    R = httpc:request(post, {URL, Header, Type, Body}, HTTPOptions, Options),
-    case R of
-        {ok, {{_,_ReturnCode, _State}, _Head, Body}} ->
-            Result = jsx:decode(list_to_binary(Body), [return_maps]),
-            {ok, Result};
-        {error, _Reason} ->
-            {error, "A problem occured"}  %TODO investigate responses and make errors meaningfull
-    end.
+%% -spec process_request(aec_peers:peer(), post, string(), map()) -> response(map()).
+%% process_request(Peer, post, Request, Map) ->
+%%     URL = aec_peers:uri(Peer) ++ "v1/" ++ Request,
+%%     Header = [],
+%%     Type = "application/json",
+%%     Body = jsx:encode(Map),
+%%     HTTPOptions = [],
+%%     Options = [],
+%%     R = httpc:request(post, {URL, Header, Type, Body}, HTTPOptions, Options),
+%%     case R of
+%%         {ok, {{_,_ReturnCode, _State}, _Head, Body}} ->
+%%             {ok, Body};
+%%         {error, _Reason} ->
+%%             {error, "A problem occured"}  %TODO investigate responses and make errors meaningfull
+%%     end.
 
 
