@@ -26,7 +26,6 @@ pow_test_() ->
        {timeout, 60,
         fun() ->
                 %% succeeds in a single step
-                SmallDiff = 0,
                 {T1, Res} = timer:tc(?TEST_MODULE, generate,
                                      [<<"wsffgujnjkqhduihsahswgdf">>, ?HIGHEST_TARGET_SCI, 100]),
                 ?debugFmt("~nReceived result ~p~nin ~p microsecs~n~n", [Res, T1]),
@@ -48,6 +47,18 @@ pow_test_() ->
                 ?debugFmt("Received result ~p~n", [Res]),
                 ?assertEqual({error, generation_count_exhausted}, Res)
         end}
+      },
+      {"Test with nonce longer than 32 bits: shall not cause badarg",
+       fun() ->
+               meck:expect(aec_pow, pick_nonce, fun() -> 16#7FFFFFFF + 1 end),
+
+               try ?TEST_MODULE:generate(<<"wsffgujnjkqhduihsahswgdf">>, 16#01010000, 1) of
+                   Res ->
+                       ok
+               catch C:E ->
+                       ?assertEqual(ok, {C, E})
+               end
+        end
       }
      ]
     }.
