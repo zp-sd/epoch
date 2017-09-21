@@ -15,12 +15,12 @@
          info/1,
          all/0,
          get_random/0,
-	 get_random/1,
+         get_random/1,
          get_random/2,
          uri_from_ip_port/2,
          uri/1,
-	 set_local_peer_uri/1,
-	 get_local_peer_uri/0,
+         set_local_peer_uri/1,
+         get_local_peer_uri/0,
          update_last_seen/1]).
 
 %% gen_server callbacks
@@ -159,7 +159,7 @@ update_last_seen(Uri) ->
 %%%=============================================================================
 
 -record(state, {peers :: gb_trees:tree(binary(),peer()),
-		local_peer_uri :: uri()}).
+    local_peer_uri :: uri()}).
 
 start_link() ->
     gen_server:start_link({local, ?MODULE} ,?MODULE, ok, []).
@@ -223,10 +223,10 @@ handle_cast({add, Peer, Connect}, State = #state{peers = Peers})
 handle_cast({remove, PeerUri}, State = #state{peers = Peers}) ->
     HashUri = hash_uri(normalize_uri(PeerUri)),
     NewPeers = case gb_trees:lookup(HashUri, Peers) of
-		   none -> Peers;
-		   {value, _} ->
-		       gb_trees:delete(HashUri, Peers)
-	       end,
+       none -> Peers;
+       {value, _} ->
+           gb_trees:delete(HashUri, Peers)
+         end,
     {noreply, State#state{peers=NewPeers}}.
 
 handle_info(_Info, State) ->
@@ -263,10 +263,10 @@ ensure_trailing_slash(Uri) ->
     Sz = byte_size(B),
     PSz = Sz - 1,
     case B of
-	<<_:PSz/binary, "/">> ->
-	    binary_to_list(B);
-	Pfx ->
-	    binary_to_list(<<Pfx/binary, "/">>)
+  <<_:PSz/binary, "/">> ->
+      binary_to_list(B);
+  Pfx ->
+      binary_to_list(<<Pfx/binary, "/">>)
     end.
 
 get_random_n(N, Exclude, Tree) ->
@@ -275,12 +275,12 @@ get_random_n(N, Exclude, Tree) ->
                        exclude_peer(P, Acc)
                end, Tree, Exclude),
     case gb_trees:size(Pruned) of
-	Sz when Sz =< N ->
-	    gb_trees:values(Pruned);
-	Sz ->
-	    Ps = random_values(N, Sz),
-	    I = gb_trees:iterator(Pruned),
-	    pick_values(Ps, I)
+  Sz when Sz =< N ->
+      gb_trees:values(Pruned);
+  Sz ->
+      Ps = random_values(N, Sz),
+      I = gb_trees:iterator(Pruned),
+      pick_values(Ps, I)
     end.
 
 exclude_peer(#peer{uri = Uri}, T) ->
@@ -297,10 +297,10 @@ random_values(N, Sz) ->
 random_values(N, Sz, Acc) when N > 0 ->
     R = rand:uniform(Sz),
     case ordsets:is_element(R, Acc) of
-	true ->
-	    random_values(N, Sz, Acc);
-	false ->
-	    random_values(N-1, Sz, ordsets:add_element(R, Acc))
+  true ->
+      random_values(N, Sz, Acc);
+  false ->
+      random_values(N-1, Sz, ordsets:add_element(R, Acc))
     end;
 random_values(_, _, Acc) ->
     Acc.

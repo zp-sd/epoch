@@ -31,6 +31,7 @@ setup() ->
 
 teardown(_) ->
     aec_peers:remove("http://localhost:8043/"),
-    application:stop(aehttp),
+    ok = application:stop(aehttp),
+    ok = application:stop(aecore),
     inets:stop().
 -endif.

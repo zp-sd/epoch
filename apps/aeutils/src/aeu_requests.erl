@@ -12,7 +12,7 @@
 
 -type response(Type) :: {ok, Type} | {error, string()}.
 
--spec ping(aec_peers:peer()) -> response(pong).
+-spec ping(aec_peers:peer()) -> response(map()).
 ping(Peer) ->
     Req = "ping?source=" ++ source_uri() ++ share_param(),
     Response = process_request(Peer, get, Req),
@@ -64,7 +64,7 @@ block(Peer, Hash) ->
 
 -spec process_request(aec_peers:peer(), get, string()) ->
 			     response(B) when
-      B :: aec_blocks:block_serialized_for_network().
+      B :: aec_blocks:block_serialized_for_network() | map().
 process_request(Peer, get, Request) ->
     URL = aec_peers:uri(Peer) ++ "v1/" ++ Request,
     Header = [],
