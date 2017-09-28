@@ -4,6 +4,7 @@ language: erlang
 otp_release:
   - 20.0.1
 before_install:
+  - if test osx = "${TRAVIS_OS_NAME:?}"; then test "/usr/local" = "$(brew --prefix)"; fi # Ensure that Homebrew prefix is [the expected one](https://github.com/Homebrew/brew/blob/24d747597f345d3b64c471bc93d96eff115abbbf/docs/External-Commands.md#shell-scripts) - for caching.
   - if test osx = "${TRAVIS_OS_NAME:?}"; then export HOMEBREW_CACHE="$HOME/Library/Caches/Homebrew"; fi
   - if test osx = "${TRAVIS_OS_NAME:?}"; then brew update; fi
   - if test osx = "${TRAVIS_OS_NAME:?}"; then brew install erlang && export PATH="$(brew --prefix erlang)"/bin:"$PATH"; fi
@@ -48,3 +49,5 @@ cache:
   directories:
     - $HOME/.cache/rebar3
     - $HOME/Library/Caches/Homebrew
+    - /usr/local/.git
+    - /usr/local/Library/Taps/homebrew/homebrew-core/.git
