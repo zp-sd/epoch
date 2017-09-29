@@ -564,17 +564,18 @@ db_put(Db, K, V) ->
 db_delete(Db, K) ->
     {ok, dict:erase(K, Db)}.
 
--spec top_header_db_get(db_handle(), top_header_db_key()) ->
+-spec top_header_db_get(top_header_db(), top_header_db_key()) ->
                                db_get_return(top_header_db_value()).
 top_header_db_get(Db, K = ?TOP_HEADER) ->
     db_get(Db, atom_to_binary(K, latin1)).
 
--spec top_header_db_put(db_handle(), top_header_db_key(), top_header_db_value()
-                       ) -> db_put_return().
+-spec top_header_db_put(top_header_db(),
+                        top_header_db_key(), top_header_db_value()) ->
+                               db_put_return().
 top_header_db_put(Db, K = ?TOP_HEADER, V) ->
     db_put(Db, atom_to_binary(K, latin1), V).
 
--spec headers_db_get(db_handle(), headers_db_key()) ->
+-spec headers_db_get(headers_db(), headers_db_key()) ->
                             db_get_return(headers_db_value()).
 headers_db_get(Db, K) ->
     case db_get(Db, K) of
@@ -584,27 +585,27 @@ headers_db_get(Db, K) ->
             {ok, chain_header_deserialize(V)}
     end.
 
--spec headers_db_put(db_handle(), headers_db_key(), headers_db_value()) ->
+-spec headers_db_put(headers_db(), headers_db_key(), headers_db_value()) ->
                             db_put_return().
 headers_db_put(Db, K, V) ->
     db_put(Db, K, chain_header_serialize(V)).
 
--spec headers_db_delete(db_handle(), headers_db_key()) ->
+-spec headers_db_delete(headers_db(), headers_db_key()) ->
                                db_delete_return().
 headers_db_delete(Db, K) ->
     db_delete(Db, K).
 
--spec blocks_db_get(db_handle(), blocks_db_key()) ->
+-spec blocks_db_get(blocks_db(), blocks_db_key()) ->
                            db_get_return(blocks_db_value()).
 blocks_db_get(Db, K) ->
     db_get(Db, K).
 
--spec blocks_db_put(db_handle(), blocks_db_key(), blocks_db_value()) ->
+-spec blocks_db_put(blocks_db(), blocks_db_key(), blocks_db_value()) ->
                            db_put_return().
 blocks_db_put(Db, K, V) ->
     db_put(Db, K, V).
 
--spec blocks_db_delete(db_handle(), blocks_db_key()) ->
+-spec blocks_db_delete(blocks_db(), blocks_db_key()) ->
                               db_delete_return().
 blocks_db_delete(Db, K) ->
     db_delete(Db, K).
