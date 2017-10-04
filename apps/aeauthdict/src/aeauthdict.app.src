@@ -1,0 +1,11 @@
+{application, aeauthdict,
+ [{description, "Aetherity authenticated dictionary"},
+  {vsn, "0.1.0"},
+  {registered, []},
+  {applications,
+   [kernel,
+    stdlib,
+    lager
+   ]},
+  {env,[]}
+ ]}.
