@@ -30,6 +30,7 @@
 eval(State) ->
     loop(valid_jumpdests(State)).
 
+
 valid_jumpdests(State) ->
     Code = aevm_eeevm_state:code(State),
     JumpDests = jumpdests(0,Code, #{}),
@@ -1062,7 +1063,9 @@ loop(StateIn) ->
 			    , out_offset => OOffset
 			    , out_size => OSize},
 		    State8 = aevm_eeevm_state:set_call(Call, State7),
-		    spend_mem_gas(State, State8);
+		    {Res, State9} = call(State8),
+		    State10 = push(Res, State9),
+		    next_instruction(OP, State, State10);
 		?CALLCODE ->
 		    %% 0xf2 CALLCODE 7 1
 		    %% Message-call into this account with an alternative account’s code.
@@ -1412,3 +1415,52 @@ log_topics(AccountAddress, Topics) ->
 create_account(Value, CodeArea, State) ->
     %% TODO: Do actual account creation
     {16#DEADC0DE, State}.
+
+
+%% ------------------------------------------------------------------------
+%% CALL
+%% ------------------------------------------------------------------------
+
+call(#{ gas:= InGas} = State) ->
+    #{ gas := Gas
+     , to := To
+     , value := Value
+     , in_offset := IOffset
+     , in_size := ISize
+     , out_offset := OOffset
+     , out_size := OSize}
+	= aevm_eeevm_state:call(State),
+    Code = aevm_eeevm_state:extcode(To, State),
+    io:format("Gas ~p~n", [Gas]),
+    io:format("Code ~p~n", [Code]),
+    NewState = State#{ gas => Gas
+		     , value => Value
+		     , code => Code
+		     , out       => <<>>
+		     , call      => #{}
+		     , cp        => 0
+		     , logs      => []
+		     , memory    => #{}
+		     , stack     => []
+		     , storage   => #{}
+		     },
+    try loop(valid_jumpdests(NewState)) of
+	OutState ->
+	    OutGas = aevm_eeevm_state:gas(OutState),
+	    GasLeft = InGas + OutGas - Gas, 
+	    io:format("GasLEft ~p~n", [GasLeft]),
+	    ReturnState = aevm_eeevm_state:set_gas(GasLeft, State),
+	    {R, _} = pop(OutState),
+	    {R,ReturnState}
+    catch throw:{out_of_gas, OutState} ->
+	    GasLeft = InGas - Gas, 
+	    io:format("GasLEft ~p R: ~p~n", [GasLeft, pop(OutState)]),
+	    ReturnState = aevm_eeevm_state:set_gas(GasLeft, State),
+	    {R,_} = pop(OutState),
+	    {R,ReturnState}
+			   
+    end.
+	    
+
+
+    

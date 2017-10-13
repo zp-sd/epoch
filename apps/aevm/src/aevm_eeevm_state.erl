@@ -18,6 +18,7 @@
 	, cp/1
 	, data/1
 	, difficulty/1
+	, extcode/2
 	, extcode/4
 	, extcodesize/2
 	, gas/1
@@ -157,6 +158,9 @@ extcode(Account, Start, Length, State) ->
     CodeBlock = maps:get(Account band ?MASK160,
 			 maps:get(ext_code_blocks, State), <<>>),
     aevm_eeevm_utils:bin_copy(Start, Length, CodeBlock).
+extcode(Account, State) ->    
+    maps:get(Account band ?MASK160,
+	     maps:get(ext_code_blocks, State), <<>>).
     
 jumpdests(State) -> maps:get(jumpdests, State).
 stack(State)     -> maps:get(stack, State).

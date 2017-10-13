@@ -20,6 +20,7 @@
 extra_opts(Name) -> maps:put(blockhash, sha3, extra_opts_tc(Name)).
 %% To turn on tracing for a test case return a map with trace => true
 %% e.g. extra_opts_tc(mulmod4) -> #{trace => true};
+extra_opts_tc('ABAcalls0') -> #{trace => true};
 extra_opts_tc(Name) ->
     case gas_exception(Name) of
         true  -> #{validate_gas => false};
@@ -678,16 +679,14 @@ vm_block_info_tests() ->
     , blockhash258Block
     , blockhashInRange
     , blockhashMyBlock
-    %%, blockhashNotExistingBlock
-    %% , blockhashOutOfRange
+    , blockhashNotExistingBlock
+    , blockhashOutOfRange
     , blockhashUnderFlow
     , coinbase
     , difficulty
     , gaslimit
     , number
     , timestamp
-
-      %% TODD: Add remaining testcases.
     ].
 
 
@@ -721,7 +720,7 @@ vm_system_operations_test_() ->
 
 vm_system_operations_tests() ->
     [ %% createNameRegistrator %% TODO: Tobias: Env setup badmatch 
-
+      'ABAcalls0'
     ].
 
 %%====================================================================
