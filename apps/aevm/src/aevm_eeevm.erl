@@ -1056,7 +1056,7 @@ loop(StateIn) ->
 		    {OOffset, State6} = pop(State5),
 		    {OSize, State7} = pop(State6),
 		    Call = #{ gas => Gas
-			    , to => To
+			    , to => To band ?MASK160
 			    , value => Value
 			    , in_offset => IOffset
 			    , in_size => ISize
@@ -1421,7 +1421,15 @@ create_account(Value, CodeArea, State) ->
 %% CALL
 %% ------------------------------------------------------------------------
 
-call(#{ gas:= InGas} = State) ->
+call(State) ->
+    CallDepth = aevm_eeevm_state:calldepth(State),
+    %% Have we reached the call depth?
+    if CallDepth < 1024 -> call(CallDepth, State);
+       true -> {0, State}
+    end.
+
+call(CallDepth, State) ->
+    InGas = aevm_eeevm_state:gas(State),
     #{ gas := Gas
      , to := To
      , value := Value
@@ -1430,36 +1438,46 @@ call(#{ gas:= InGas} = State) ->
      , out_offset := OOffset
      , out_size := OSize}
 	= aevm_eeevm_state:call(State),
-    Code = aevm_eeevm_state:extcode(To, State),
+    %% Message-call into an account.
+    %% i ≡ µm[µs[3] . . .(µs[3] + µs[4] − 1)]
+    {I, State1} = aevm_eeevm_memory:get_area(IOffset, IOffset+ISize, State),
+    Code = aevm_eeevm_state:extcode(To, State1),
     io:format("Gas ~p~n", [Gas]),
     io:format("Code ~p~n", [Code]),
-    NewState = State#{ gas => Gas
-		     , value => Value
-		     , code => Code
-		     , out       => <<>>
-		     , call      => #{}
-		     , cp        => 0
-		     , logs      => []
-		     , memory    => #{}
-		     , stack     => []
-		     , storage   => #{}
-		     },
-    try loop(valid_jumpdests(NewState)) of
-	OutState ->
-	    OutGas = aevm_eeevm_state:gas(OutState),
-	    GasLeft = InGas + OutGas - Gas, 
-	    io:format("GasLEft ~p~n", [GasLeft]),
-	    ReturnState = aevm_eeevm_state:set_gas(GasLeft, State),
-	    {R, _} = pop(OutState),
-	    {R,ReturnState}
-    catch throw:{out_of_gas, OutState} ->
-	    GasLeft = InGas - Gas, 
-	    io:format("GasLEft ~p R: ~p~n", [GasLeft, pop(OutState)]),
-	    ReturnState = aevm_eeevm_state:set_gas(GasLeft, State),
-	    {R,_} = pop(OutState),
-	    {R,ReturnState}
-			   
-    end.
+    State2 = State1#{ address => To
+		    , gas => Gas
+		    , value => Value
+		    , code => Code
+		    , out       => <<>>
+		    , call      => #{}
+		    , calldepth => CallDepth + 1
+		    , cp        => 0
+		    , logs      => []
+		    , memory    => #{}
+		    , stack     => []
+		    , storage   => #{}
+		    },
+    State3 = aevm_eeevm_memory:write_area(0, I, State2), 
+    {OutGas, OutState, R} =
+	try loop(valid_jumpdests(State3)) of
+	    State4 -> {aevm_eeevm_state:gas(State4), State4, 1}
+	catch throw:{out_of_gas, State4} -> {0, State4, 0}
+	end,
+    GasLeft = InGas + OutGas, 
+    io:format("Gas in ~p to use ~p out ~p left ~p~n", [InGas, Gas, OutGas, GasLeft]),
+    CallTrace = aevm_eeevm_state:trace(OutState),
+    %% Go back to the caller state.
+    ReturnState =
+	aevm_eeevm_state:set_gas(GasLeft, 
+				 aevm_eeevm_state:add_trace(CallTrace,
+							    State)),
+    {ReturnMessage,_OutState1} =
+	aevm_eeevm_memory:get_area(0, OSize, OutState),
+    ReturnState1 = aevm_eeevm_memory:write_area(OOffset, ReturnMessage,
+						ReturnState), 
+
+    {R, ReturnState1}.
+
 	    
 
 

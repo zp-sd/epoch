@@ -9,15 +9,18 @@
 %%%-------------------------------------------------------------------
 
 -export([ accountbalance/2
+	, add_trace/2
 	, address/1
 	, blockhash/3
 	, call/1
+	, calldepth/1
         , caller/1
 	, code/1
 	, coinbase/1
 	, cp/1
 	, data/1
 	, difficulty/1
+	, extbalance/2
 	, extcode/2
 	, extcode/4
 	, extcodesize/2
@@ -46,6 +49,7 @@
 	, stack/1
 	, storage/1
 	, timestamp/1
+	, trace/1
 	, trace_format/3
 	, value/1
 	]).
@@ -87,6 +91,7 @@ init(#{ env  := Env
      , logs      => []
      , memory    => #{}
      , stack     => []
+     , call_depth=> 0
      , storage   => init_storage(Address, Pre)
 
      , do_trace  => maps:get(trace, Opts, false)
@@ -146,6 +151,7 @@ accountbalance(Address, State) ->
 address(State)   -> maps:get(address, State).
 blockhash(N,A,State) -> (maps:get(block_hash_fun, State))(N,A).
 call(State)      -> maps:get(call, State).
+calldepth(State) -> maps:get(call_depth, State).
 caller(State)    -> maps:get(caller, State).
 code(State)      -> maps:get(code, State).
 coinbase(State)  -> maps:get(coinbase, State).
@@ -161,6 +167,10 @@ extcode(Account, Start, Length, State) ->
 extcode(Account, State) ->    
     maps:get(Account band ?MASK160,
 	     maps:get(ext_code_blocks, State), <<>>).
+extbalance(Account, State) ->    
+    maps:get(Account band ?MASK160,
+	     maps:get(balances, State), <<>>).
+
     
 jumpdests(State) -> maps:get(jumpdests, State).
 stack(State)     -> maps:get(stack, State).
@@ -195,20 +205,38 @@ set_selfdestruct(Value, State) -> maps:put(selfdestruct, Value, State).
 
 add_trace(T, State) ->
     Trace = trace(State),
-    maps:put(trace, Trace ++ [T], State).
+    maps:put(trace, Trace ++ T, State).
 
 trace_format(String, Argument, State) ->
+    Account   = aevm_eeevm_state:address(State) band 65535,
     CP   = aevm_eeevm_state:cp(State),
     Code = aevm_eeevm_state:code(State),
     OP   = aevm_eeevm:code_get_op(CP, Code),
     case do_trace(State) of
 	true ->
 	    F = trace_fun(State),
-	    F("~8.16.0B : ~w", [CP, aevm_opcodes:op_name(OP)]),
+	    F("[~4.16.0B] ~8.16.0B : ~w",
+	      [Account, CP, aevm_opcodes:op_name(OP)]),
 	    F(" ~w", [stack(State)]),
-	    F(" ~p", [mem(State)]),
+	    F(" ~s", [format_mem(mem(State))]),
+	    F(" ~p", [gas(State)]),
 	    F(String, Argument),
-	    add_trace({CP, OP}, State);
+	    add_trace([{CP, OP, aevm_opcodes:op_name(OP)}], State);
 	false ->
 	    State
     end.
+
+-define(MAXMEMPOS,5).
+
+format_mem(Mem) ->
+   lists:flatten(
+     "[" ++ 
+	 format_mem(lists:sort(maps:to_list(Mem)), ?MAXMEMPOS)
+     ++ "]").
+format_mem([],_) -> [];
+format_mem( _,0) -> " ...";
+format_mem([{N,V}|Rest], ?MAXMEMPOS) when is_integer(N) -> 
+    io_lib:format("~w:~w",[N,V]) ++ format_mem(Rest, ?MAXMEMPOS-1);
+format_mem([{N,V}|Rest],          P) when is_integer(N) -> 
+    io_lib:format(", ~w:~w",[N,V]) ++ format_mem(Rest, P-1);
+format_mem([_|Rest], P) -> format_mem(Rest, P).
