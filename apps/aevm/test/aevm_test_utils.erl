@@ -103,10 +103,12 @@ validate_gas(_State, #{} =_Spec,_Opts) ->
     ok.
 
 validate_callcreates(State, #{callcreates := []} =_Spec) ->
-    Callcreates = aevm_eeevm_state:call(State),
-    ?assertEqual(0, maps:size(Callcreates));
-validate_callcreates(_State, #{callcreates := [_|_] =_CallcreatesSpec} =_Spec) ->
-    error(callcreates_nyi).
+    Callcreates = aevm_eeevm_state:callcreates(State),
+    ?assertEqual([], Callcreates);
+validate_callcreates(State, #{callcreates := CallcreatesSpec} =_Spec) ->
+    Callcreates = aevm_eeevm_state:callcreates(State),
+    ?assertEqual(CallcreatesSpec, Callcreates).
+
 
 %%--------------------------------------------------------------------
 %% Interfacing to aevm_eevm

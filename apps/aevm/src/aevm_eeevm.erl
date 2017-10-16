@@ -23,6 +23,7 @@
 -export([code_get_op/2]).
 
 -include("aevm_eeevm.hrl").
+-include("aevm_gas.hrl").
 
 %% Main eval loop.
 %%
@@ -63,8 +64,8 @@ loop(StateIn) ->
     case CP >= byte_size(Code) of
 	false ->
 	    OP   = code_get_op(CP, Code),
-            State = spend_op_gas(OP, StateIn),
-	    State0 = aevm_eeevm_state:trace_format("~n", [], State),
+	    State = aevm_eeevm_state:trace_format("~n", [], StateIn),
+            State0 = spend_op_gas(OP, State),
 	    case OP of
 		%% =s: Stop and Arithmetic Operations
 		?STOP ->
@@ -1048,24 +1049,9 @@ loop(StateIn) ->
 		    %%              0 otherwise
 		    %%
 		    %% TODO: This is probably completely wrong:
-		    {Gas, State1} = pop(State0),
-		    {To, State2} = pop(State1),
-		    {Value, State3} = pop(State2),
-		    {IOffset, State4} = pop(State3),
-		    {ISize, State5} = pop(State4),
-		    {OOffset, State6} = pop(State5),
-		    {OSize, State7} = pop(State6),
-		    Call = #{ gas => Gas
-			    , to => To band ?MASK160
-			    , value => Value
-			    , in_offset => IOffset
-			    , in_size => ISize
-			    , out_offset => OOffset
-			    , out_size => OSize},
-		    State8 = aevm_eeevm_state:set_call(Call, State7),
-		    {Res, State9} = call(State8),
-		    State10 = push(Res, State9),
-		    next_instruction(OP, State, State10);
+                    {Res, State1} = recursive_call(State0),
+		    State2 = push(Res, State1),
+		    next_instruction(OP, State, State2);
 		?CALLCODE ->
 		    %% 0xf2 CALLCODE 7 1
 		    %% Message-call into this account with an alternative account’s code.
@@ -1334,6 +1320,12 @@ inc_cp(Amount, State) ->
 %% GAS
 %% ------------------------------------------------------------------------
 
+spend_call_gas(State) ->
+    spend_gas_common(aevm_gas:op_cost(?CALL, State), State).
+
+spend_op_gas(?CALL, State) ->
+    %% Delay this until the actual operation
+    State;
 spend_op_gas(Op, State) ->
     spend_gas_common(aevm_gas:op_cost(Op, State), State).
 
@@ -1421,64 +1413,60 @@ create_account(Value, CodeArea, State) ->
 %% CALL
 %% ------------------------------------------------------------------------
 
-call(State) ->
+recursive_call(State) ->
     CallDepth = aevm_eeevm_state:calldepth(State),
-    %% Have we reached the call depth?
-    if CallDepth < 1024 -> call(CallDepth, State);
-       true -> {0, State}
+    case CallDepth < 1024 of
+        false -> {0, State}; %% TODO: Should this consume gas?
+        true  -> recursive_call(CallDepth, State)
     end.
 
-call(CallDepth, State) ->
-    InGas = aevm_eeevm_state:gas(State),
-    #{ gas := Gas
-     , to := To
-     , value := Value
-     , in_offset := IOffset
-     , in_size := ISize
-     , out_offset := OOffset
-     , out_size := OSize}
-	= aevm_eeevm_state:call(State),
+recursive_call(CallDepth, StateIn) ->
     %% Message-call into an account.
     %% i ≡ µm[µs[3] . . .(µs[3] + µs[4] − 1)]
-    {I, State1} = aevm_eeevm_memory:get_area(IOffset, IOffset+ISize, State),
-    Code = aevm_eeevm_state:extcode(To, State1),
-    io:format("Gas ~p~n", [Gas]),
-    io:format("Code ~p~n", [Code]),
-    State2 = State1#{ address => To
-		    , gas => Gas
-		    , value => Value
-		    , code => Code
-		    , out       => <<>>
-		    , call      => #{}
-		    , calldepth => CallDepth + 1
-		    , cp        => 0
-		    , logs      => []
-		    , memory    => #{}
-		    , stack     => []
-		    , storage   => #{}
-		    },
-    State3 = aevm_eeevm_memory:write_area(0, I, State2), 
-    {OutGas, OutState, R} =
-	try loop(valid_jumpdests(State3)) of
-	    State4 -> {aevm_eeevm_state:gas(State4), State4, 1}
-	catch throw:{out_of_gas, State4} -> {0, State4, 0}
-	end,
-    GasLeft = InGas + OutGas, 
-    io:format("Gas in ~p to use ~p out ~p left ~p~n", [InGas, Gas, OutGas, GasLeft]),
-    CallTrace = aevm_eeevm_state:trace(OutState),
-    %% Go back to the caller state.
-    ReturnState =
-	aevm_eeevm_state:set_gas(GasLeft, 
-				 aevm_eeevm_state:add_trace(CallTrace,
-							    State)),
-    {ReturnMessage,_OutState1} =
-	aevm_eeevm_memory:get_area(0, OSize, OutState),
-    ReturnState1 = aevm_eeevm_memory:write_area(OOffset, ReturnMessage,
-						ReturnState), 
-
-    {R, ReturnState1}.
-
-	    
-
-
-    
+    State0            = spend_call_gas(StateIn),
+    {Gas, State1}     = pop(State0),
+    {To, State2}      = pop(State1),
+    {Value, State3}   = pop(State2),
+    {IOffset, State4} = pop(State3),
+    {ISize, State5}   = pop(State4),
+    {OOffset, State6} = pop(State5),
+    {OSize, State7}   = pop(State6),
+    {I, State8}       = aevm_eeevm_memory:get_area(IOffset, ISize, State7),
+    GasAfterSpend     = aevm_eeevm_state:gas(State8),
+    Code              = aevm_eeevm_state:extcode(To, State8),
+    CallGas = case Value =/= 0 of
+                  true -> ?GCALLSTIPEND + Gas;
+                  false -> Gas
+              end,
+    CallState = aevm_eeevm_state:prepare_for_call(To, CallGas, Value,
+                                                  Code, CallDepth,
+                                                  State8),
+    case aevm_eeevm_state:no_recursion(State8) of
+        true  -> %% TODO: Set callcreates
+            GasOut = GasAfterSpend + CallGas,
+            State9 = aevm_eeevm_state:set_gas(GasOut, State8),
+            State10 = aevm_eeevm_state:add_callcreates(#{ data => I
+                                                        , destination => To
+                                                        , gasLimit => CallGas
+                                                        , value => Value
+                                                        }, State9),
+            {1, State10};
+        false ->
+            %% TODO: Should this not count towards mem gas?
+            CallState1 = aevm_eeevm_memory:write_area(0, I, CallState),
+            {OutGas, OutState, R} =
+                try loop(valid_jumpdests(CallState1)) of
+                    OutState2 -> {aevm_eeevm_state:gas(OutState2), OutState2, 1}
+                catch
+                    throw:{out_of_gas,_RState2} -> {0, CallState1, 1}
+                end,
+            CallTrace = aevm_eeevm_state:trace(OutState),
+            %% Go back to the caller state.
+            ReturnState1 = aevm_eeevm_state:add_trace(CallTrace, State8),
+            GasAfterCall = GasAfterSpend + OutGas,
+            ReturnState2 = aevm_eeevm_state:set_gas(GasAfterCall, ReturnState1),
+            {Message,_}  = aevm_eeevm_memory:get_area(0, OSize, OutState),
+            ReturnState3 = aevm_eeevm_memory:write_area(OOffset, Message,
+                                                        ReturnState2),
+            {R, ReturnState3}
+    end.

@@ -10,11 +10,12 @@
 
 -export([ accountbalance/2
 	, add_trace/2
+	, add_callcreates/2
 	, address/1
 	, blockhash/3
-	, call/1
 	, calldepth/1
         , caller/1
+        , callcreates/1
 	, code/1
 	, coinbase/1
 	, cp/1
@@ -33,9 +34,10 @@
 	, logs/1
 	, origin/1
         , out/1
+        , prepare_for_call/6
 	, mem/1
+        , no_recursion/1
 	, number/1
-	, set_call/2
 	, set_code/2
 	, set_cp/2
 	, set_gas/2
@@ -63,6 +65,7 @@ init(#{ env  := Env
       , pre  := Pre} = _Spec, Opts) ->
     Address = maps:get(address, Exec),
     BlockHashFun = get_blockhash_fun(Opts, Env, Address),
+    NoRecursion = maps:get(no_recursion, Opts, false),
 
     #{ address   => Address
      , caller    => maps:get(caller, Exec)
@@ -82,9 +85,10 @@ init(#{ env  := Env
      , ext_code_blocks => get_ext_code_blocks(Pre)
      , ext_code_sizes  => get_ext_code_sizes(Pre)
      , block_hash_fun  => BlockHashFun
+     , no_recursion => NoRecursion
 
      , out       => <<>>
-     , call      => #{}
+     , callcreates => []
 
      , code      => maps:get(code, Exec)
      , cp        => 0
@@ -99,6 +103,21 @@ init(#{ env  := Env
      , trace_fun => init_trace_fun(Opts)
 
      }.
+
+prepare_for_call(To, CallGas, Value, Code, CallDepth, State) ->
+    State#{ address => To
+          , gas => CallGas
+          , value => Value
+          , code => Code
+          , out       => <<>>
+          , call      => #{}
+          , calldepth => CallDepth + 1
+          , cp        => 0
+          , logs      => []
+          , memory    => #{}
+          , stack     => []
+          , storage   => #{}
+          }.
 
 init_storage(Address, #{} = Pre) ->
     case maps:get(Address, Pre, undefined) of
@@ -150,9 +169,9 @@ accountbalance(Address, State) ->
     maps:get(Address band ?MASK160, maps:get(balances, State), 0).
 address(State)   -> maps:get(address, State).
 blockhash(N,A,State) -> (maps:get(block_hash_fun, State))(N,A).
-call(State)      -> maps:get(call, State).
 calldepth(State) -> maps:get(call_depth, State).
 caller(State)    -> maps:get(caller, State).
+callcreates(State) -> maps:get(callcreates, State).
 code(State)      -> maps:get(code, State).
 coinbase(State)  -> maps:get(coinbase, State).
 cp(State)        -> maps:get(cp, State).
@@ -170,8 +189,10 @@ extcode(Account, State) ->
 extbalance(Account, State) ->    
     maps:get(Account band ?MASK160,
 	     maps:get(balances, State), <<>>).
+no_recursion(State) ->
+    maps:get(no_recursion, State).
 
-    
+
 jumpdests(State) -> maps:get(jumpdests, State).
 stack(State)     -> maps:get(stack, State).
 mem(State)       -> maps:get(memory, State).
@@ -191,7 +212,6 @@ trace(State)     -> maps:get(trace, State).
 trace_fun(State) -> maps:get(trace_fun, State).
 
 
-set_call(Value, State)    -> maps:put(call, Value, State).
 set_cp(Value, State)      -> maps:put(cp, Value, State).
 set_code(Value, State)    -> maps:put(code, Value, State).
 set_stack(Value, State)   -> maps:put(stack, Value, State).
@@ -202,6 +222,12 @@ set_logs(Value, State)    -> maps:put(logs, Value, State).
 set_storage(Value, State) -> maps:put(storage, Value, State).
 set_jumpdests(Value, State)    -> maps:put(jumpdests, Value, State).
 set_selfdestruct(Value, State) -> maps:put(selfdestruct, Value, State).
+
+add_callcreates(#{ data := _
+                 , destination := _
+                 , gasLimit := _
+                 , value := _} = Callcreates, #{callcreates := Old} = State) ->
+    State#{callcreates => [Callcreates|Old]}.
 
 add_trace(T, State) ->
     Trace = trace(State),

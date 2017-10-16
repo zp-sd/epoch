@@ -18,10 +18,16 @@
 %%   of the corresponding blocks. Therefore we define the hash of 
 %%   block number n to be SHA3-256("n")."
 %% Indicated by the option blockhash->sha3
-extra_opts(Name) -> maps:put(blockhash, sha3, extra_opts_tc(Name)).
+extra_opts(Name) ->
+    maps:merge(default_opts(), extra_opts_tc(Name)).
+
+default_opts() ->
+    #{ blockhash => sha3
+     , no_recursion => true
+     }.
+
 %% To turn on tracing for a test case return a map with trace => true
 %% e.g. extra_opts_tc(mulmod4) -> #{trace => true};
-extra_opts_tc('ABAcalls0') -> #{trace => true};
 extra_opts_tc(Name) ->
     case gas_exception(Name) of
         true  -> #{validate_gas => false};
