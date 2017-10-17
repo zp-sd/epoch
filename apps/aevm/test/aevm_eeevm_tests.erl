@@ -726,10 +726,36 @@ vm_system_operations_test_() ->
     aevm_test_utils:testcase_generate(Path, Tests, fun extra_opts/1).
 
 vm_system_operations_tests() ->
-    [ %% createNameRegistrator %% TODO: Tobias: Env setup badmatch 
+    [ %% createNameRegistrator %% TODO: Tobias: Env setup badmatch
       'ABAcalls0'
-    , callcodeToReturn1
+    %% , 'ABAcalls1'
+    %% , 'ABAcalls2'
+    %% , 'ABAcalls3'
+    %% , 'ABAcallsSuicide0'
+    %% , 'ABAcallsSuicide1'
+    , 'CallRecursiveBomb0'
+    %% , 'CallRecursiveBomb1'
+    %% , 'CallRecursiveBomb2'
+    %% , 'CallRecursiveBomb3'
+    , callstatelessToNameRegistrator0
+    , callstatelessToReturn1
+    , 'CallToNameRegistrator0'
+    , 'CallToNameRegistratorNotMuchMemory0'
+    , 'CallToNameRegistratorNotMuchMemory1'
+    , 'CallToNameRegistratorOutOfGas'
+    , 'CallToNameRegistratorTooMuchMemory0'
+    , 'CallToNameRegistratorTooMuchMemory1'
+    , 'CallToNameRegistratorTooMuchMemory2'
+    %%, 'CallToPrecompiledContract'
+    , 'CallToReturn1'
+    , 'PostToNameRegistrator0'
+    , 'PostToReturn1'
+    , suicideNotExistingAccount
     , callcodeToNameRegistrator0
+    , callcodeToReturn1
+    , callstatelessToReturn1
+    , 'CallToReturn1'
+    , 'PostToReturn1'
     ].
 
 %%====================================================================
