@@ -1048,8 +1048,7 @@ loop(StateIn) ->
 		    %% CNEW(σ, µ) ≡ Gnewaccount if σ[µs[1] mod 2^160] = ∅
 		    %%              0 otherwise
 		    %%
-		    %% TODO: This is probably completely wrong:
-                    {Res, State1} = recursive_call(State0),
+                    {Res, State1} = recursive_call(State0, OP),
 		    State2 = push(Res, State1),
 		    next_instruction(OP, State, State2);
 		?CALLCODE ->
@@ -1066,23 +1065,9 @@ loop(StateIn) ->
 		    %% present address Ia. This means that the recipient is
 		    %% in fact the same account as at present, simply that
 		    %% the code is overwritten.
-		    {Gas, State1} = pop(State0),
-		    {_To, State2} = pop(State1),
-		    {Value, State3} = pop(State2),
-		    {IOffset, State4} = pop(State3),
-		    {ISize, State5} = pop(State4),
-		    {OOffset, State6} = pop(State5),
-		    {OSize, State7} = pop(State6),
-		    %% TODO: This is most certanly wrong
-		    Call = #{ gas => Gas
-			    , to => aevm_eeevm_state:address(State7)
-			    , value => Value
-			    , in_offset => IOffset
-			    , in_size => ISize
-			    , out_offset => OOffset
-			    , out_size => OSize},
-		    State8 = aevm_eeevm_state:set_call(Call, State7),
-                    spend_mem_gas(State, State8);
+                    {Res, State1} = recursive_call(State0, OP),
+		    State2 = push(Res, State1),
+		    next_instruction(OP, State, State2);
 		?RETURN ->
 		    %% 0xf3 RETURN δ=2 α=0
 		    %% Halt execution returning output data.
@@ -1116,21 +1101,9 @@ loop(StateIn) ->
 		    %% This means that the recipient is in fact the same account as at
 		    %% present, simply that the code is overwritten and the context is
 		    %% almost entirely identical.
-		    %% TODO: This is probably completely wrong:
-		    {Gas, State1} = pop(State0),
-		    {To, State2} = pop(State1),
-		    {IOffset, State3} = pop(State2),
-		    {ISize, State4} = pop(State3),
-		    {OOffset, State5} = pop(State4),
-		    {OSize, State6} = pop(State5),
-		    Call = #{ gas => Gas
-			    , to => To
-			    , in_offset => IOffset
-			    , in_size => ISize
-			    , out_offset => OOffset
-			    , out_size => OSize},
-		    State7 = aevm_eeevm_state:set_call(Call, State6),
-		    spend_mem_gas(State, State7);
+                    {Res, State1} = recursive_call(State0, OP),
+		    State2 = push(Res, State1),
+		    next_instruction(OP, State, State2);
 		16#f5 -> throw({illegal_instruction, OP, State0});
 		16#f6 -> throw({illegal_instruction, OP, State0});
 		16#f7 -> throw({illegal_instruction, OP, State0});
@@ -1320,10 +1293,14 @@ inc_cp(Amount, State) ->
 %% GAS
 %% ------------------------------------------------------------------------
 
-spend_call_gas(State) ->
+spend_call_gas(State, OP) when OP =:= ?CALL;
+                               OP =:= ?CALLCODE ->
     spend_gas_common(aevm_gas:op_cost(?CALL, State), State).
 
 spend_op_gas(?CALL, State) ->
+    %% Delay this until the actual operation
+    State;
+spend_op_gas(?CALLCODE, State) ->
     %% Delay this until the actual operation
     State;
 spend_op_gas(Op, State) ->
@@ -1413,17 +1390,18 @@ create_account(Value, CodeArea, State) ->
 %% CALL
 %% ------------------------------------------------------------------------
 
-recursive_call(State) ->
+recursive_call(State, Op) ->
     CallDepth = aevm_eeevm_state:calldepth(State),
     case CallDepth < 1024 of
         false -> {0, State}; %% TODO: Should this consume gas?
-        true  -> recursive_call(CallDepth, State)
+        true  -> recursive_call(CallDepth, State, Op)
     end.
 
-recursive_call(CallDepth, StateIn) ->
+recursive_call(CallDepth, StateIn, Op) ->
     %% Message-call into an account.
     %% i ≡ µm[µs[3] . . .(µs[3] + µs[4] − 1)]
-    State0            = spend_call_gas(StateIn),
+    State0            = spend_call_gas(StateIn, Op),
+
     {Gas, State1}     = pop(State0),
     {To, State2}      = pop(State1),
     {Value, State3}   = pop(State2),
@@ -1431,6 +1409,11 @@ recursive_call(CallDepth, StateIn) ->
     {ISize, State5}   = pop(State4),
     {OOffset, State6} = pop(State5),
     {OSize, State7}   = pop(State6),
+
+    Dest              = case Op of
+                            ?CALL -> To;
+                            ?CALLCODE -> aevm_eeevm_state:address(State6)
+                        end,
     {I, State8}       = aevm_eeevm_memory:get_area(IOffset, ISize, State7),
     GasAfterSpend     = aevm_eeevm_state:gas(State8),
     Code              = aevm_eeevm_state:extcode(To, State8),
@@ -1446,7 +1429,7 @@ recursive_call(CallDepth, StateIn) ->
             GasOut = GasAfterSpend + CallGas,
             State9 = aevm_eeevm_state:set_gas(GasOut, State8),
             State10 = aevm_eeevm_state:add_callcreates(#{ data => I
-                                                        , destination => To
+                                                        , destination => Dest
                                                         , gasLimit => CallGas
                                                         , value => Value
                                                         }, State9),

@@ -728,6 +728,8 @@ vm_system_operations_test_() ->
 vm_system_operations_tests() ->
     [ %% createNameRegistrator %% TODO: Tobias: Env setup badmatch 
       'ABAcalls0'
+    , callcodeToReturn1
+    , callcodeToNameRegistrator0
     ].
 
 %%====================================================================
