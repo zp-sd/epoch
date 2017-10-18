@@ -1,3 +1,5 @@
+-define(aevm_eval_error(___What___, ___State___),
+        {aevm_eval_error, ___What___, ___State___}).
 
 %% EVM opcodes
 -define(           'STOP', 16#00).

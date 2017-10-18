@@ -29,8 +29,11 @@
 %%
 %%
 eval(State) ->
-    loop(valid_jumpdests(State)).
-
+    try {ok, loop(valid_jumpdests(State))}
+    catch
+        throw:?aevm_eval_error(What, StateOut) ->
+            {error, What, StateOut}
+    end.
 
 valid_jumpdests(State) ->
     Code = aevm_eeevm_state:code(State),
@@ -193,10 +196,10 @@ loop(StateIn) ->
 		    State3 = push(Val, State2),
 		    next_instruction(OP, State, State3);
 		%% No opcodes 0x0c-0x0f
-		16#0c -> throw({illegal_instruction, OP, State});
-		16#0d -> throw({illegal_instruction, OP, State});
-		16#0e -> throw({illegal_instruction, OP, State});
-		16#0f -> throw({illegal_instruction, OP, State});
+		16#0c -> eval_error({illegal_instruction, OP}, State);
+		16#0d -> eval_error({illegal_instruction, OP}, State);
+		16#0e -> eval_error({illegal_instruction, OP}, State);
+		16#0f -> eval_error({illegal_instruction, OP}, State);
 		%% 10s: Comparison & Bitwise Logic Operations
 		?LT ->
 		    %% 0x10 LT δ=2 α=1
@@ -326,11 +329,11 @@ loop(StateIn) ->
 		    State3 = push(Val, State2),
 		    next_instruction(OP, State, State3);
 		%% No opcodes 0x1b-0x1f
-		16#1b -> throw({illegal_instruction, OP, State});
-		16#1c -> throw({illegal_instruction, OP, State});
-		16#1d -> throw({illegal_instruction, OP, State});
-		16#1e -> throw({illegal_instruction, OP, State});
-		16#1f -> throw({illegal_instruction, OP, State});
+		16#1b -> eval_error({illegal_instruction, OP}, State);
+		16#1c -> eval_error({illegal_instruction, OP}, State);
+		16#1d -> eval_error({illegal_instruction, OP}, State);
+		16#1e -> eval_error({illegal_instruction, OP}, State);
+		16#1f -> eval_error({illegal_instruction, OP}, State);
 		%% 20s: SHA3
 		?SHA3 ->
 		    %% 0x20 SHA3  δ=2 α=1 Compute Keccak-256 hash.
@@ -344,21 +347,21 @@ loop(StateIn) ->
 		    State4 = push(Val, State3),
 		    next_instruction(OP, State, State4);
 		%% No opcodes 0x21-0x2f
-		16#21 -> throw({illegal_instruction, OP, State});
-		16#22 -> throw({illegal_instruction, OP, State});
-		16#23 -> throw({illegal_instruction, OP, State});
-		16#24 -> throw({illegal_instruction, OP, State});
-		16#25 -> throw({illegal_instruction, OP, State});
-		16#26 -> throw({illegal_instruction, OP, State});
-		16#27 -> throw({illegal_instruction, OP, State});
-		16#28 -> throw({illegal_instruction, OP, State});
-		16#29 -> throw({illegal_instruction, OP, State});
-		16#2a -> throw({illegal_instruction, OP, State});
-		16#2b -> throw({illegal_instruction, OP, State});
-		16#2c -> throw({illegal_instruction, OP, State});
-		16#2d -> throw({illegal_instruction, OP, State});
-		16#2e -> throw({illegal_instruction, OP, State});
-		16#2f -> throw({illegal_instruction, OP, State});
+		16#21 -> eval_error({illegal_instruction, OP}, State);
+		16#22 -> eval_error({illegal_instruction, OP}, State);
+		16#23 -> eval_error({illegal_instruction, OP}, State);
+		16#24 -> eval_error({illegal_instruction, OP}, State);
+		16#25 -> eval_error({illegal_instruction, OP}, State);
+		16#26 -> eval_error({illegal_instruction, OP}, State);
+		16#27 -> eval_error({illegal_instruction, OP}, State);
+		16#28 -> eval_error({illegal_instruction, OP}, State);
+		16#29 -> eval_error({illegal_instruction, OP}, State);
+		16#2a -> eval_error({illegal_instruction, OP}, State);
+		16#2b -> eval_error({illegal_instruction, OP}, State);
+		16#2c -> eval_error({illegal_instruction, OP}, State);
+		16#2d -> eval_error({illegal_instruction, OP}, State);
+		16#2e -> eval_error({illegal_instruction, OP}, State);
+		16#2f -> eval_error({illegal_instruction, OP}, State);
 		%% 30s: Environmental Information
 		?ADDRESS ->
 		    %% 0x30 Address δ=0 α=1
@@ -508,7 +511,7 @@ loop(StateIn) ->
 			   lists:flatten(
 			     io_lib:format("~2.16.0B",[OP]))});
 		%% No opcode 0x3f
-		16#3f -> throw({illegal_instruction, OP, State0});
+		16#3f -> eval_error({illegal_instruction, OP}, State0);
 		%% 40s Block Information
 		?BLOCKHASH ->
 		    %% 0x40 BLOCKHASH δ=1 α=1
@@ -566,16 +569,16 @@ loop(StateIn) ->
 		    State1 = push(Arg, State0),
 		    next_instruction(OP, State, State1);
 		%% No opcode 0x46-0x4f
-		16#46 -> throw({illegal_instruction, OP, State0});
-		16#47 -> throw({illegal_instruction, OP, State0});
-		16#48 -> throw({illegal_instruction, OP, State0});
-		16#49 -> throw({illegal_instruction, OP, State0});
-		16#4a -> throw({illegal_instruction, OP, State0});
-		16#4b -> throw({illegal_instruction, OP, State0});
-		16#4c -> throw({illegal_instruction, OP, State0});
-		16#4d -> throw({illegal_instruction, OP, State0});
-		16#4e -> throw({illegal_instruction, OP, State0});
-		16#4f -> throw({illegal_instruction, OP, State0});
+		16#46 -> eval_error({illegal_instruction, OP}, State0);
+		16#47 -> eval_error({illegal_instruction, OP}, State0);
+		16#48 -> eval_error({illegal_instruction, OP}, State0);
+		16#49 -> eval_error({illegal_instruction, OP}, State0);
+		16#4a -> eval_error({illegal_instruction, OP}, State0);
+		16#4b -> eval_error({illegal_instruction, OP}, State0);
+		16#4c -> eval_error({illegal_instruction, OP}, State0);
+		16#4d -> eval_error({illegal_instruction, OP}, State0);
+		16#4e -> eval_error({illegal_instruction, OP}, State0);
+		16#4f -> eval_error({illegal_instruction, OP}, State0);
 		%% 50s: Stack, Memory, Storage and Flow Operations
 		?POP ->
 		    %% 0x50 POP δ=1 α=0
@@ -648,7 +651,7 @@ loop(StateIn) ->
 			true -> 
 			    State2 = set_cp(Us0-1, State1),
 			    next_instruction(OP, State, State2);
-			false -> throw({{invalid_jumpdest, Us0}, State1})
+			false -> eval_error({{invalid_jumpdest, Us0}}, State1)
 		    end;
 		?JUMPI ->
 		    %% 0x57 JUMPI δ=2 α=0
@@ -665,7 +668,7 @@ loop(StateIn) ->
 				    true -> 
 					set_cp(Us0-1, State2);
 				    false -> 
-					throw({{invalid_jumpdest, Us0}, State1})
+					eval_error({{invalid_jumpdest, Us0}}, State1)
 				end;
 			   true      -> State2
 			end,
@@ -699,10 +702,10 @@ loop(StateIn) ->
 		    %% This operation has no effect on machine
 		    %% state during execution.
 		    next_instruction(OP, State, State0);
-		16#5c -> throw({illegal_instruction, OP, State0});
-		16#5d -> throw({illegal_instruction, OP, State0});
-		16#5e -> throw({illegal_instruction, OP, State0});
-		16#5f -> throw({illegal_instruction, OP, State0});
+		16#5c -> eval_error({illegal_instruction, OP}, State0);
+		16#5d -> eval_error({illegal_instruction, OP}, State0);
+		16#5e -> eval_error({illegal_instruction, OP}, State0);
+		16#5f -> eval_error({illegal_instruction, OP}, State0);
 		%% 60s & 70s Push Operations
 		?PUSH1 ->
 		    %% 0x60 PUSH1 δ=0 α=1
@@ -971,7 +974,7 @@ loop(StateIn) ->
 		    next_instruction(OP, State, State7);
 		OP when OP >= 16#a5,
 			OP =< 16#ef  ->
-		    throw({illegal_instruction, OP, State0});
+		    eval_error({illegal_instruction, OP}, State0);
 		%% F0s: System operations
 		?CREATE->
 		    %% 0xf0 CREATE δ=3 α=1 
@@ -1104,19 +1107,19 @@ loop(StateIn) ->
                     {Res, State1} = recursive_call(State0, OP),
 		    State2 = push(Res, State1),
 		    next_instruction(OP, State, State2);
-		16#f5 -> throw({illegal_instruction, OP, State0});
-		16#f6 -> throw({illegal_instruction, OP, State0});
-		16#f7 -> throw({illegal_instruction, OP, State0});
-		16#f8 -> throw({illegal_instruction, OP, State0});
-		16#f9 -> throw({illegal_instruction, OP, State0});
-		16#fa -> throw({illegal_instruction, OP, State0});
-		16#fb -> throw({illegal_instruction, OP, State0});
-		16#fc -> throw({illegal_instruction, OP, State0});
-		16#fd -> throw({illegal_instruction, OP, State0});
+		16#f5 -> eval_error({illegal_instruction, OP}, State0);
+		16#f6 -> eval_error({illegal_instruction, OP}, State0);
+		16#f7 -> eval_error({illegal_instruction, OP}, State0);
+		16#f8 -> eval_error({illegal_instruction, OP}, State0);
+		16#f9 -> eval_error({illegal_instruction, OP}, State0);
+		16#fa -> eval_error({illegal_instruction, OP}, State0);
+		16#fb -> eval_error({illegal_instruction, OP}, State0);
+		16#fc -> eval_error({illegal_instruction, OP}, State0);
+		16#fd -> eval_error({illegal_instruction, OP}, State0);
 		?INVALID -> 
 		    %% 0xfe INVALID δ=∅ α=∅ 
 		    %% Designated invalid instruction.
-		    throw({the_invalid_instruction, OP, State0});
+		    eval_error({the_invalid_instruction, OP}, State0);
 		?SUICIDE ->
 		    %% 0xff SELFDESTRUCT 1 0
 		    %% Halt execution and register account for
@@ -1252,7 +1255,7 @@ data_get_bytes(Address, Size, State) ->
     Data = aevm_eeevm_state:data(State),
     try aevm_eeevm_utils:bin_copy(Address, Size, Data)
     catch error:system_limit ->
-	    throw({out_of_memory, State})
+	    eval_error(out_of_memory, State)
     end.
 				     
 
@@ -1313,7 +1316,7 @@ spend_gas_common(Cost, State) ->
     Gas  = aevm_eeevm_state:gas(State),
     case Gas >= Cost of
 	true ->  aevm_eeevm_state:set_gas(Gas - Cost, State);
-	false -> throw({out_of_gas, State})
+	false -> eval_error(out_of_gas, State)
     end.
 
 %% ------------------------------------------------------------------------
@@ -1421,6 +1424,10 @@ recursive_call(CallDepth, StateIn, Op) ->
                   true -> ?GCALLSTIPEND + Gas;
                   false -> Gas
               end,
+    case GasAfterSpend >= CallGas of
+        true  -> ok;
+        false -> eval_error(out_of_gas, State7)
+    end,
     CallState = aevm_eeevm_state:prepare_for_call(To, CallGas, Value,
                                                   Code, CallDepth,
                                                   State8),
@@ -1438,10 +1445,9 @@ recursive_call(CallDepth, StateIn, Op) ->
             %% TODO: Should this not count towards mem gas?
             CallState1 = aevm_eeevm_memory:write_area(0, I, CallState),
             {OutGas, OutState, R} =
-                try loop(valid_jumpdests(CallState1)) of
-                    OutState2 -> {aevm_eeevm_state:gas(OutState2), OutState2, 1}
-                catch
-                    throw:{out_of_gas,_RState2} -> {0, CallState1, 1}
+                case eval(CallState1) of
+                    {ok, OutState2} -> {aevm_eeevm_state:gas(OutState2), OutState2, 1};
+                    {error, {out_of_gas,_RState2}} -> {0, CallState1, 1}
                 end,
             CallTrace = aevm_eeevm_state:trace(OutState),
             %% Go back to the caller state.
@@ -1453,3 +1459,11 @@ recursive_call(CallDepth, StateIn, Op) ->
                                                         ReturnState2),
             {R, ReturnState3}
     end.
+
+%% ------------------------------------------------------------------------
+%% Error handling
+%% ------------------------------------------------------------------------
+
+-spec eval_error(_, _) -> no_return().
+eval_error(What, State) ->
+    throw(?aevm_eval_error(What, State)).

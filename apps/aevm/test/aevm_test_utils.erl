@@ -64,15 +64,33 @@ testcase({Path, Name, Opts}, Spec) ->
               InitState = init_state(Spec, Opts),
               ?opt_format(Opts, "Init state: ~p~n", [InitState]),
               ?opt_format(Opts, "Running: ~w~n", [Name]),
-              State = ?wrap_run(run_eeevm(InitState)),
-              ?opt_format(Opts, "Checking: ~w~n", [Name]),
-              ?opt_format(Opts, "State of ~w: ~p~n", [Name, State]),
-              validate_storage(State, Spec),
-              validate_out(State, Spec),
-              validate_gas(State, Spec, Opts),
-              validate_callcreates(State, Spec)
+              case ?wrap_run(run_eeevm(InitState)) of
+                  {ok, State} ->
+                      %% Executed to completion'
+                      ?opt_format(Opts, "Checking: ~w~n", [Name]),
+                      ?opt_format(Opts, "State of ~w: ~p~n", [Name, State]),
+                      validate_storage(State, Spec),
+                      validate_out(State, Spec),
+                      validate_gas(State, Spec, Opts),
+                      validate_callcreates(State, Spec),
+                      {ok, State};
+                  {error, What, State} ->
+                      %% Handle execution exceptions gracefully here.
+                      %% Some testcases are not supposed to work.
+                      %% This is implicitly flagged in the config
+                      %% by leaving out some fields.
+                      %% TODO: Check the config
+                      io:format("Error ~p~n", [What]),
+                      validate_no_post(Spec),
+                      {error, State}
+              end
       end
     }.
+
+validate_no_post(#{post := _} = Spec) ->
+    error({should_have_succeeded, Spec});
+validate_no_post(#{}) ->
+    ok.
 
 validate_storage(State, #{exec := #{address := Addr}} = Spec) ->
     case Spec of
@@ -117,16 +135,7 @@ init_state(Spec, Opts) ->
     aevm_eeevm_state:init(Spec, Opts).
 
 run_eeevm(State) ->
-    try aevm_eeevm:eval(State) of
-	NewState ->
-	    %% Executed to completion'
-	    NewState
-	    %% TODO: Possibly flag callouts here
-    catch throw:{Error, ErrorState} ->
-	    %% Handle execution exceptions gracefully here.
-	    io:format("Error ~p~n", [Error]),
-	    ErrorState
-    end.
+    aevm_eeevm:eval(State).
 
 %%--------------------------------------------------------------------
 %% Expanding the opts that is sent to the aevm_eeevm:run/1

@@ -180,7 +180,7 @@ arithmetic_tests() ->
     , mul5
     , mul6
     , mul7
-      %% , mulUnderFlow %% Missing callcreates
+    , mulUnderFlow
     , mulmod0
     , mulmod1
     , mulmod1_overflow
@@ -210,7 +210,7 @@ arithmetic_tests() ->
     , sdivByZero0
     , sdivByZero1
     , sdivByZero2
-      %% , sdiv_dejavu %% Missing callcreates && post. Illegal pop
+    , sdiv_dejavu
     , sdiv_i256min
     , sdiv_i256min2
     , sdiv_i256min3
@@ -223,7 +223,7 @@ arithmetic_tests() ->
     , signextend_BitIsSetInHigherByte
     , signextend_bitIsSet
     , signextendInvalidByteNumber
-      %% , signextend_Overflow_dj42 %% Missing callcreates && post. Illegal pop
+    %% , signextend_Overflow_dj42
     , smod0
     , smod1
     , smod2
@@ -327,10 +327,10 @@ vm_test_() ->
     aevm_test_utils:testcase_generate(Path, Tests, fun extra_opts/1).
 
 vm_tests() ->
-    [ %% arith    %% Missing post in all of these
-      %% boolean 
-      %% mktx
-      suicide
+    [ arith    %% Missing post in all of these
+    , boolean
+    , mktx
+    , suicide
     ].
 
 %%====================================================================
@@ -343,7 +343,7 @@ vm_push_dup_swap_test_() ->
 vm_push_dup_swap_tests() ->
     [ dup1
     , dup2
-      %% , dup2error %% Throws pop on empty. TC-Spec has no post block.
+    , dup2error
     , dup3
     , dup4
     , dup5
@@ -396,7 +396,7 @@ vm_push_dup_swap_tests() ->
     , push32Undefined
     , push32Undefined2
     , push32Undefined3
-      %% , push33 %% No post in TC-spec
+    , push33
     , swap1
     , swap2
     , swap3
@@ -413,8 +413,8 @@ vm_push_dup_swap_tests() ->
     , swap14
     , swap15
     , swap16
-      %% , swap2error %% No post in TC-spec
-      %% , swapjump1  %% No post in TC-spec
+    , swap2error
+    , swapjump1
     ].
 
 %%====================================================================
@@ -430,13 +430,13 @@ vm_sha3_tests() ->
     [ sha3_0
     , sha3_1
     , sha3_2
-    , sha3_3 %% no post
-    , sha3_4 %% no post
-      %% , sha3_5 %% timeout
-      %% , sha3_6 %% timeout
-    , sha3_bigOffset %% no post
+    , sha3_3
+    , sha3_4
+    , sha3_5
+    , sha3_6
+    , sha3_bigOffset
     , sha3_bigOffset2
-      %% , sha3_bigSize %% timeout
+    , sha3_bigSize
     , sha3_memSizeNoQuadraticCost31
     , sha3_memSizeQuadraticCost32
     , sha3_memSizeQuadraticCost32_zeroSize
@@ -514,7 +514,7 @@ vm_io_and_flow_operations_tests() ->
     , 'extcodecopyMemExp'
     , for_loop1
     , for_loop2
-      %%    , gas0
+    , gas0
     , gas1
     , gasOverFlow
     , 'indirect_jump1'
@@ -728,7 +728,7 @@ vm_system_operations_test_() ->
 vm_system_operations_tests() ->
     [ %% createNameRegistrator %% TODO: Tobias: Env setup badmatch
       'ABAcalls0'
-    %% , 'ABAcalls1'
+    , 'ABAcalls1'
     %% , 'ABAcalls2'
     %% , 'ABAcalls3'
     %% , 'ABAcallsSuicide0'
@@ -750,7 +750,7 @@ vm_system_operations_tests() ->
     , 'CallToReturn1'
     , 'PostToNameRegistrator0'
     , 'PostToReturn1'
-    , suicideNotExistingAccount
+    %%, suicideNotExistingAccount
     , callcodeToNameRegistrator0
     , callcodeToReturn1
     , callstatelessToReturn1
