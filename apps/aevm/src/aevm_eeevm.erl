@@ -1407,15 +1407,19 @@ recursive_call(CallDepth, StateIn, Op) ->
 
     {Gas, State1}     = pop(State0),
     {To, State2}      = pop(State1),
-    {Value, State3}   = pop(State2),
+    {Value, State3}   = case Op of
+                            ?CALL         -> pop(State2);
+                            ?CALLCODE     -> pop(State2);
+                            ?DELEGATECALL -> {aevm_eeevm_state:value(State2), State2}
+                        end,
     {IOffset, State4} = pop(State3),
     {ISize, State5}   = pop(State4),
     {OOffset, State6} = pop(State5),
     {OSize, State7}   = pop(State6),
-
     Dest              = case Op of
                             ?CALL -> To;
-                            ?CALLCODE -> aevm_eeevm_state:address(State6)
+                            ?CALLCODE -> aevm_eeevm_state:address(State6);
+                            ?DELEGATECALL -> aevm_eeevm_state:address(State6)
                         end,
     {I, State8}       = aevm_eeevm_memory:get_area(IOffset, ISize, State7),
     GasAfterSpend     = aevm_eeevm_state:gas(State8),
@@ -1428,7 +1432,12 @@ recursive_call(CallDepth, StateIn, Op) ->
         true  -> ok;
         false -> eval_error(out_of_gas, State7)
     end,
-    CallState = aevm_eeevm_state:prepare_for_call(To, CallGas, Value,
+    Caller = case Op of
+                 ?CALL -> aevm_eeevm_state:address(State8);
+                 ?CALLCODE -> aevm_eeevm_state:address(State8);
+                 ?DELEGATECALL -> aevm_eeevm_state:caller(State8)
+             end,
+    CallState = aevm_eeevm_state:prepare_for_call(Caller, Dest, CallGas, Value,
                                                   Code, CallDepth,
                                                   State8),
     case aevm_eeevm_state:no_recursion(State8) of

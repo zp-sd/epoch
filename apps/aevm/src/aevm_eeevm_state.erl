@@ -34,7 +34,7 @@
 	, logs/1
 	, origin/1
         , out/1
-        , prepare_for_call/6
+        , prepare_for_call/7
 	, mem/1
         , no_recursion/1
 	, number/1
@@ -104,13 +104,14 @@ init(#{ env  := Env
 
      }.
 
-prepare_for_call(To, CallGas, Value, Code, CallDepth, State) ->
-    State#{ address => To
+prepare_for_call(Caller, Dest, CallGas, Value, Code, CallDepth, State) ->
+    State#{ address => Dest
           , gas => CallGas
           , value => Value
           , code => Code
           , out       => <<>>
           , call      => #{}
+          , caller    => Caller
           , calldepth => CallDepth + 1
           , cp        => 0
           , logs      => []
