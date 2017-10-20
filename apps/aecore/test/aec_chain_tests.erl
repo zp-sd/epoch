@@ -1276,6 +1276,8 @@ longest_block_chain_test_() ->
                ?assertEqual({ok, HA3}, aec_chain:top_header()),
                ?assertEqual({ok, BA2}, aec_chain:top_block()),
 
+               timer:sleep(1000), %% TODO Make this event driven.
+
                %% Check state of the world changed ...
                AltTop = aec_chain_top_ok(),
                ?assertNotEqual(aec_blocks:set_trees(B0, S0), AltTop),

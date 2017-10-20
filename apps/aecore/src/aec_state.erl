@@ -18,6 +18,7 @@
 
 %% API designed for chain service
 -export([get_trees/0,
+         apply_txs/1,
          apply_txs/2,
          force_trees/2,
          async_check_chain_for_successor/0]).
@@ -37,7 +38,10 @@
 -define(DEFAULT_CALL_TIMEOUT, infinity).
 
 -record(state, {trees  :: trees(),
-                height = ?GENESIS_HEIGHT :: height()}).
+                height = ?GENESIS_HEIGHT :: height(),
+                block_hash :: binary(),
+                checkpoints = [] :: [trees()]
+               }).
 
 -define(PRE_GENESIS_HEIGHT, ?GENESIS_HEIGHT-1).
 
@@ -52,9 +56,15 @@ start_link() ->
 get_trees() ->
     gen_server:call(?SERVER, get_trees, ?DEFAULT_CALL_TIMEOUT).
 
--spec apply_txs(list(), height()) -> {ok, {height(), trees()}} | {{error, atom()}, trees()}.
-apply_txs(Txs, AtHeight) ->
-    gen_server:call(?SERVER, {apply_txs, {Txs, AtHeight}}, ?DEFAULT_CALL_TIMEOUT).
+%% -spec apply_txs(list(), height()) -> {ok, {height(), trees()}} | {{error, atom()}, trees()}.
+apply_txs(Block) ->
+    apply_txs(Block, aec_headers:hash_header(aec_blocks:to_header(Block))).
+
+apply_txs(Block, Hash) ->
+    Height = aec_blocks:height(Block),
+    PrevHash = aec_blocks:prev_hash(Block),
+    Txs    = aec_blocks:txs(Block),
+    gen_server:call(?SERVER, {apply_txs, {Txs, Hash, PrevHash, Height}}, ?DEFAULT_CALL_TIMEOUT).
 
 %% API needed when external fork has more POW and we need to restart tree from common ancestor
 -spec force_trees(trees(), integer()) -> {ok, {height(), trees()}}.
@@ -84,7 +94,7 @@ check_chain_for_successor(Trees, AtHeight) ->
     SuccessorHeight = AtHeight+1,
     case aec_chain:get_block_by_height(SuccessorHeight) of
         {ok, Block} ->
-            {ok, TreesUpdated} = ?MODULE:apply_txs(aec_blocks:txs(Block), SuccessorHeight),
+            {ok, TreesUpdated} = ?MODULE:apply_txs(Block),
             check_chain_for_successor(TreesUpdated, SuccessorHeight);
         {error, {_, _}} -> %% block_not_found, chain_too_short
             {Trees, AtHeight}
@@ -104,21 +114,25 @@ handle_call(get_trees, _From, #state{trees = Trees, height = Height} = State) ->
     {reply, {ok, {Height, Trees}}, State};
 
 handle_call({force_trees, {Trees, AtHeight}}, _From, State) ->
-    {reply, {ok, {AtHeight, Trees}}, State#state{trees = Trees, height = AtHeight}};
+    NewState = State#state{ trees = Trees
+                          , height = AtHeight
+                          , checkpoints = []},
+    {reply, {ok, {AtHeight, Trees}}, NewState};
 
-handle_call({apply_txs, {Txs, AtHeight}}, _From,
-            #state{trees = Trees, height = CurrentHeigth} = State) ->
-    {Reply, TreesUpdated, HeightUpdated}
-        = case validate_height(CurrentHeigth, AtHeight) of
-              true ->
-                  {ok, TreesUpdated0} = apply_txs_internal(Txs, Trees, AtHeight),
-                  spawn_link(?MODULE, check_chain_for_successor, [TreesUpdated0, AtHeight]),
-                  {ok, TreesUpdated0, AtHeight};
-              false ->
-                  {{error, not_next_block}, Trees, CurrentHeigth}
-          end,
-    {reply, {Reply, {HeightUpdated, TreesUpdated}},
-        State#state{trees=TreesUpdated, height = HeightUpdated}}.
+handle_call({apply_txs, {Txs, Hash, PrevBlockHash, AtHeight}}, _From,
+            #state{trees = Trees} = State) ->
+    {Reply, NewState} =
+        case validate_order(PrevHash, AtHeight, PrevBlockHash) of
+            true ->
+                {ok, TreesUpdated} = apply_txs_internal(Txs, Trees, AtHeight),
+                State1 = State#state{trees=TreesUpdated, height = AtHeight},
+                State2 = checkpoint_head(Hash, State1),
+                ?MODULE:async_check_chain_for_successor(),
+                {ok, State2};
+            false ->
+                {{error, not_next_block}, State}
+        end,
+    {reply, {Reply, {NewState#state.height, NewState#state.trees}}, NewState}.
 
 handle_cast({check_chain_for_successor},
             #state{trees = Trees, height = Height} = State) ->
@@ -184,9 +198,17 @@ apply_txs_internal([], Trees, _) ->
 apply_txs_internal(Txs, Trees, AtHeight) ->
     aec_tx:apply_signed(Txs, Trees, AtHeight).
 
-%% TODO: introduce validation by hash (to cover forks with more PoW)
--spec validate_height(non_neg_integer(), height()) -> boolean().
-validate_height(CurrentHeigth, AtHeight) ->
-    CurrentHeigth + 1 == AtHeight.
+-spec validate_order(binary(), non_neg_integer(), #state{}) -> boolean().
+validate_order(PrevBlockHash, AtHeight, #state{} = State) ->
+    (State#state.height + 1 =:= AtHeight)
+        andalso (State#state.block_hash =:= PrevBlockHash).
 
 
+%%%===================================================================
+%%% Checkpoint handling
+%%%===================================================================
+
+checkpoint_head(_Hash, #state{} = State) ->
+    %% TODO: consider handling deltas.
+    %% TODO: perform checkpointing
+    State.

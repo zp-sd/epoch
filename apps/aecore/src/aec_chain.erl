@@ -937,7 +937,7 @@ do_write_block(Block, TopHeader, TopBlock, HeadersDb, BlocksDb) ->
                     BlockHeight = aec_headers:height(Header),
                     TopBlockHeight = aec_blocks:height(TopBlock),
                     {_, {_StateHeight, _Trees}} =
-                            aec_state:apply_txs(aec_blocks:txs(Block), BlockHeight),
+                        aec_state:apply_txs(Block, HeaderHash),
 
                     %% Store block.
                     {ok, SerializedBlock} =
