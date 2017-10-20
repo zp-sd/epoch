@@ -1239,11 +1239,14 @@ longest_block_chain_test_() ->
 
                %% Check top block changed.
                ?assertEqual({ok, HA3}, aec_chain:top_header()),
-
+	       
+	       %% !!!! Race condition here !!!!
+	       timer:sleep(2000),
                %% Check state of the world changed ...
                AltTop = aec_chain_top_ok(),
                ?assertNotEqual(aec_blocks:set_trees(B0, S0), AltTop),
                %% ... and it is at highest block of alternative chain.
+
                ?assertEqual(BA2, aec_blocks:set_trees(AltTop,
                                                       aec_blocks:trees(BA2))),
 
