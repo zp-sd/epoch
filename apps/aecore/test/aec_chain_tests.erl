@@ -21,7 +21,6 @@ top_test_() ->
      [{"Initialize chain with genesis block, then check top block with related state trees",
        fun() ->
                GB = genesis_block(),
-               ?assertEqual({ok, GB}, aec_chain:top_block()),
 
                {ok, Top} = aec_chain:top(),
                %% Check block apart from state trees.
@@ -45,7 +44,6 @@ genesis_test_() ->
      end,
      fun() ->
              GB = genesis_block(),
-             ?assertEqual({ok, GB}, aec_chain:top_block()),
              GH = aec_blocks:to_header(GB),
              ?assertEqual({ok, GH}, aec_chain:top_header()),
 
@@ -87,8 +85,6 @@ header_chain_test_() ->
 
              %% Check highest header.
              ?assertEqual({ok, BH2}, aec_chain:top_header()),
-             %% Check highest known block - still genesis.
-             ?assertEqual({ok, B0}, aec_chain:top_block()),
 
              %% Check by hash.
              ?assertEqual({ok, BH0}, aec_chain:get_header_by_hash(B0H)),
@@ -154,8 +150,6 @@ block_chain_test_() ->
 
                %% Check highest header.
                ?assertEqual({ok, BH2}, aec_chain:top_header()),
-               %% Check highest known block.
-               ?assertEqual({ok, B2}, aec_chain:top_block()),
 
                %% Check by hash.
                ?assertEqual({ok, BH0}, aec_chain:get_header_by_hash(B0H)),
@@ -211,8 +205,6 @@ block_chain_test_() ->
 
                %% Check highest header.
                ?assertEqual({ok, BH2}, aec_chain:top_header()),
-               %% Check highest known block.
-               ?assertEqual({ok, B1}, aec_chain:top_block()),
 
                %% Check by hash.
                ?assertEqual({ok, BH0}, aec_chain:get_header_by_hash(B0H)),
@@ -274,10 +266,7 @@ get_work_test_() ->
 
                %% Check work of chain at top.
                ?assertEqual({ok, {1.0, {top_header, BH0}}},
-                            aec_chain:get_total_difficulty()),
-               {ok, B0H} = aec_blocks:hash_internal_representation(B0),
-               ?assertEqual({ok, {1.0, {top_header, BH0}}},
-                            aec_chain:get_total_difficulty_by_hash(B0H))
+                            aec_chain:get_total_difficulty())
        end},
       {"Get work in chain of genesis block plus 2 headers",
        fun() ->
@@ -299,16 +288,7 @@ get_work_test_() ->
 
                %% Check work of chain at top.
                ?assertEqual({ok, {8.0, {top_header, BH2}}},
-                            aec_chain:get_total_difficulty()),
-
-               %% Check work at each header in the chain.
-               {ok, B2H} = aec_headers:hash_header(BH2),
-               ?assertEqual({ok, {8.0, {top_header, BH2}}},
-                            aec_chain:get_total_difficulty_by_hash(B2H)),
-               ?assertEqual({ok, {3.0, {top_header, BH2}}},
-                            aec_chain:get_total_difficulty_by_hash(B1H)),
-               ?assertEqual({ok, {1.0, {top_header, BH2}}},
-                            aec_chain:get_total_difficulty_by_hash(B0H))
+                            aec_chain:get_total_difficulty())
        end}]}.
 
 %% Cover unhappy paths not covered in any other tests.
@@ -921,7 +901,6 @@ longest_block_chain_test_() ->
 
                %% Check chain is at genesis.
                ?assertEqual({ok, H0}, aec_chain:top_header()),
-               ?assertEqual({ok, B0}, aec_chain:top_block()),
 
                %% Check state of the world is at genesis.
                S0 = aec_blocks:trees(aec_block_genesis:genesis_block()),
@@ -939,7 +918,6 @@ longest_block_chain_test_() ->
 
                %% Check top is main chain.
                ?assertEqual({ok, HM2}, aec_chain:top_header()),
-               ?assertEqual({ok, B2}, aec_chain:top_block()),
 
                %% Check state of the world changed ...
                MainTop = aec_chain_top_ok(),
@@ -971,7 +949,6 @@ longest_block_chain_test_() ->
 
                %% Check top changed.
                ?assertEqual({ok, HA3}, aec_chain:top_header()),
-               ?assertEqual({ok, B0}, aec_chain:top_block()),
 
                %% Check state of the world is back to genesis.
                ?assertEqual(aec_blocks:set_trees(B0, S0), aec_chain_top_ok()),
@@ -985,7 +962,6 @@ longest_block_chain_test_() ->
 
                %% Check top block changed.
                ?assertEqual({ok, HA3}, aec_chain:top_header()),
-               ?assertEqual({ok, BA3}, aec_chain:top_block()),
 
                %% Check state of the world changed ...
                AltTop = aec_chain_top_ok(),
@@ -1025,7 +1001,6 @@ longest_block_chain_test_() ->
 
                %% Check chain is at genesis.
                ?assertEqual({ok, H0}, aec_chain:top_header()),
-               ?assertEqual({ok, B0}, aec_chain:top_block()),
 
                %% Check state of the world is at genesis.
                S0 = aec_blocks:trees(aec_block_genesis:genesis_block()),
@@ -1041,7 +1016,6 @@ longest_block_chain_test_() ->
 
                %% Check top is main chain.
                ?assertEqual({ok, HM2}, aec_chain:top_header()),
-               ?assertEqual({ok, B2}, aec_chain:top_block()),
 
                %% Check state of the world changed ...
                MainTop = aec_chain_top_ok(),
@@ -1075,7 +1049,6 @@ longest_block_chain_test_() ->
 
                %% Check top changed.
                ?assertEqual({ok, HA3}, aec_chain:top_header()),
-               ?assertEqual({ok, B1}, aec_chain:top_block()),
 
                %% Check state of the world changed ...
                timer:sleep(1000), %% TODO Make this event driven.
@@ -1092,7 +1065,6 @@ longest_block_chain_test_() ->
 
                %% Check top block changed.
                ?assertEqual({ok, HA3}, aec_chain:top_header()),
-               ?assertEqual({ok, BA3}, aec_chain:top_block()),
 
                %% Check state of the world changed ...
                AltTop = aec_chain_top_ok(),
@@ -1130,7 +1102,6 @@ longest_block_chain_test_() ->
 
                %% Check chain is at genesis.
                ?assertEqual({ok, H0}, aec_chain:top_header()),
-               ?assertEqual({ok, B0}, aec_chain:top_block()),
 
                %% Check state of the world is at genesis.
                S0 = aec_blocks:trees(aec_block_genesis:genesis_block()),
@@ -1146,7 +1117,6 @@ longest_block_chain_test_() ->
 
                %% Check top is main chain.
                ?assertEqual({ok, HM2}, aec_chain:top_header()),
-               ?assertEqual({ok, B2}, aec_chain:top_block()),
 
                %% Check state of the world is still at genesis.
                ?assertEqual(aec_blocks:set_trees(B0, S0), aec_chain_top_ok()),
@@ -1172,7 +1142,6 @@ longest_block_chain_test_() ->
 
                %% Check top changed.
                ?assertEqual({ok, HA3}, aec_chain:top_header()),
-               ?assertEqual({ok, B0}, aec_chain:top_block()),
 
                %% Check state of the world is still at genesis.
                ?assertEqual(aec_blocks:set_trees(B0, S0), aec_chain_top_ok()),
@@ -1183,7 +1152,6 @@ longest_block_chain_test_() ->
 
                %% Check top block changed.
                ?assertEqual({ok, HA3}, aec_chain:top_header()),
-               ?assertEqual({ok, BA3}, aec_chain:top_block()),
 
                %% Check state of the world is still at genesis.
                ?assertEqual(aec_blocks:set_trees(B0, S0), aec_chain_top_ok()),
@@ -1217,7 +1185,6 @@ longest_block_chain_test_() ->
 
                %% Check chain is at genesis.
                ?assertEqual({ok, H0}, aec_chain:top_header()),
-               ?assertEqual({ok, B0}, aec_chain:top_block()),
 
                %% Check state of the world is at genesis.
                S0 = aec_blocks:trees(aec_block_genesis:genesis_block()),
@@ -1233,7 +1200,6 @@ longest_block_chain_test_() ->
 
                %% Check top is main chain.
                ?assertEqual({ok, HM2}, aec_chain:top_header()),
-               ?assertEqual({ok, B1}, aec_chain:top_block()),
 
                %% Check state of the world changed ...
                MainTop = aec_chain_top_ok(),
@@ -1263,7 +1229,6 @@ longest_block_chain_test_() ->
 
                %% Check top changed.
                ?assertEqual({ok, HA3}, aec_chain:top_header()),
-               ?assertEqual({ok, B0}, aec_chain:top_block()),
 
                %% Check state of the world is back to genesis.
                ?assertEqual(aec_blocks:set_trees(B0, S0), aec_chain_top_ok()),
@@ -1274,7 +1239,6 @@ longest_block_chain_test_() ->
 
                %% Check top block changed.
                ?assertEqual({ok, HA3}, aec_chain:top_header()),
-               ?assertEqual({ok, BA2}, aec_chain:top_block()),
 
                %% Check state of the world changed ...
                AltTop = aec_chain_top_ok(),

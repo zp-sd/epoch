@@ -49,6 +49,7 @@
 -include("blocks.hrl").
 
 -define(SERVER, ?MODULE).
+-define(CHAIN_SERVER, aec_chain_server).
 -define(DEFAULT_CALL_TIMEOUT, infinity). %% For synchronous persistence and for forced chain (fork).
 
 -define(IS_HEIGHT(H), %% For guard.
@@ -118,9 +119,12 @@
 
 start_link(GenesisBlock) ->
     Args = [GenesisBlock],
+    aec_chain_server:start_link(GenesisBlock),
+    timer:sleep(1000),
     gen_server:start_link({local, ?SERVER}, ?MODULE, Args, []).
 
 stop() ->
+    aec_chain_server:stop(),
     gen_server:stop(?SERVER).
 
 %% Returns the highest known block in the chain with its state trees
@@ -131,6 +135,7 @@ stop() ->
 %% TODO: handle out-of-order blocks
 -spec top() -> {ok, block()}.
 top() ->
+    gen_server:call(?CHAIN_SERVER, top, ?DEFAULT_CALL_TIMEOUT),
     {ok, {Height, Trees}} = aec_state:get_trees(),
     {ok, BlockWithoutState} = get_block_by_height(Height),
     {ok, BlockWithoutState#block{trees = Trees}}.
@@ -138,6 +143,9 @@ top() ->
 %% Returns the highest block header in the chain.
 -spec top_header() -> do_top_header_reply().
 top_header() ->
+    gen_server:call(?CHAIN_SERVER, top_header,
+                    ?DEFAULT_CALL_TIMEOUT),
+
     %% TODO Store top header in ETS table so not to require server state.
     gen_server:call(?SERVER, {top_header},
                     ?DEFAULT_CALL_TIMEOUT).
@@ -148,27 +156,41 @@ top_header() ->
 %% in the chain as returned by `top_header/0`.
 -spec top_block() -> do_top_block_reply().
 top_block() ->
+    %% Deprecated function in new aec_chain_server.
+
     %% TODO Store top block in ETS table so not to require server state.
     gen_server:call(?SERVER, {top_block},
                     ?DEFAULT_CALL_TIMEOUT).
 
 -spec get_header_by_hash(block_header_hash()) -> do_get_header_by_hash_reply().
 get_header_by_hash(HeaderHash) ->
+    gen_server:call(?CHAIN_SERVER, {get_header, HeaderHash},
+                    ?DEFAULT_CALL_TIMEOUT),
+
     gen_server:call(?SERVER, {get_header_by_hash, HeaderHash},
                     ?DEFAULT_CALL_TIMEOUT).
 
 -spec get_block_by_hash(block_header_hash()) -> do_get_block_by_hash_reply().
 get_block_by_hash(HeaderHash) ->
+    gen_server:call(?CHAIN_SERVER, {get_block, HeaderHash},
+                    ?DEFAULT_CALL_TIMEOUT),
+
     gen_server:call(?SERVER, {get_block_by_hash, HeaderHash},
                     ?DEFAULT_CALL_TIMEOUT).
 
 -spec get_header_by_height(height()) -> do_get_header_by_height_reply().
 get_header_by_height(Height) ->
+    gen_server:call(?CHAIN_SERVER, {get_header_by_height, Height},
+                    ?DEFAULT_CALL_TIMEOUT),
+
     gen_server:call(?SERVER, {get_header_by_height, Height},
                     ?DEFAULT_CALL_TIMEOUT).
 
 -spec get_block_by_height(height()) -> do_get_block_by_height_reply().
 get_block_by_height(Height) ->
+    gen_server:call(?CHAIN_SERVER, {get_block_by_height, Height},
+                    ?DEFAULT_CALL_TIMEOUT),
+
     gen_server:call(?SERVER, {get_block_by_height, Height},
                     ?DEFAULT_CALL_TIMEOUT).
 
@@ -177,6 +199,9 @@ get_block_by_height(Height) ->
 -spec insert_header(header()) -> do_insert_header_reply_ok() |
                                  do_insert_header_reply_error().
 insert_header(Header) ->
+    gen_server:call(?CHAIN_SERVER, {insert_header, Header},
+                    ?DEFAULT_CALL_TIMEOUT),
+
     gen_server:call(?SERVER, {insert_header, Header},
                     ?DEFAULT_CALL_TIMEOUT).
 
@@ -184,6 +209,9 @@ insert_header(Header) ->
 -spec write_block(do_write_block_argument()) -> do_write_block_reply_ok() |
                                                 do_write_block_reply_error().
 write_block(Block) ->
+    gen_server:call(?CHAIN_SERVER, {write_block, Block},
+                    ?DEFAULT_CALL_TIMEOUT),
+
     gen_server:call(?SERVER, {write_block, Block},
                     ?DEFAULT_CALL_TIMEOUT).
 
@@ -191,6 +219,10 @@ write_block(Block) ->
 %% difficulty of the top header.
 -spec get_total_difficulty() -> do_get_total_difficulty_reply().
 get_total_difficulty() ->
+    gen_server:call(?CHAIN_SERVER, difficulty,
+		    ?DEFAULT_CALL_TIMEOUT),
+    
+
     gen_server:call(?SERVER, {get_total_difficulty},
                     ?DEFAULT_CALL_TIMEOUT).
 
@@ -198,6 +230,8 @@ get_total_difficulty() ->
 -spec get_total_difficulty_by_hash(block_header_hash()) ->
                                           do_get_total_difficulty_by_hash_reply().
 get_total_difficulty_by_hash(HeaderHash) ->
+    %% Deprecated
+
     gen_server:call(?SERVER, {get_total_difficulty_by_hash, HeaderHash},
                     ?DEFAULT_CALL_TIMEOUT).
 
@@ -207,6 +241,8 @@ get_total_difficulty_by_hash(HeaderHash) ->
         block_header_hash()
        ) -> do_get_total_difficulty_by_hash_and_of_top_reply().
 get_total_difficulty_by_hash_and_of_top(HeaderHash) ->
+    %% Deprecated
+
     gen_server:call(?SERVER, {get_total_difficulty_by_hash_and_of_top,
                               HeaderHash},
                     ?DEFAULT_CALL_TIMEOUT).
@@ -221,6 +257,8 @@ get_total_difficulty_by_hash_and_of_top(HeaderHash) ->
       Reason :: {no_common_ancestor, {top_header, header()}}
               | {different_genesis, {genesis_header, header()}}.
 has_more_work(HeaderChain = [LowerHeader | _]) ->
+    %% Deprecated
+
     %% This function does not guarantee that the specified list of
     %% headers is a chain, i.e. it does not check fields height and
     %% previous hash in each header in relation to the previous
@@ -281,6 +319,7 @@ has_more_work(HeaderChain = [LowerHeader | _]) ->
                                   do_force_insert_headers_reply_ok() |
                                   do_force_insert_headers_reply_error().
 force_insert_headers(HeaderChain) ->
+    %% Deprecated 
     gen_server:call(?SERVER, {force_insert_headers, HeaderChain},
                     ?DEFAULT_CALL_TIMEOUT).
 
