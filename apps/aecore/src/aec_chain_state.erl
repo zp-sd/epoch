@@ -143,21 +143,75 @@ check_update_after_insert(Node, State) ->
     State1 = case determine_chain_relation(Node, State) of
                  off_chain -> State;
                  in_chain -> State;
-                 new_top -> set_top_header_hash(Node#node.hash, State);
-                 missing_link -> find_new_header_top(Node, State)
+                 new_top ->
+                     NewTopNode = find_new_header_top_from_node(Node, State),
+                     set_top_header_hash(NewTopNode#node.hash, State)
              end,
     case TopBlockHash =:= PrevHash of
         true -> update_state_tree(PrevHash, Node, State1);
-        false -> State
+        false -> State1
     end.
 
-determine_chain_relation(_Node,_State) ->
-    %% TODO: This.
-    off_chain.
+determine_chain_relation(Node, State) ->
+    Height   = node_height(Node),
+    PrevHash = prev_hash(Node),
+    case top_header_hash(State) of
+        PrevHash -> new_top;
+        undefined when Height > 0 -> off_chain; %% No proper chain yet.
+        undefined when Height =:= 0 -> new_top; %% A genesis block. TODO: Should this be checked?
+        TopHash when is_binary(TopHash), Height =:= 0 ->
+            %% A new genesis block. TODO: This
+            error({new_genesis_block, nyi});
+        TopHash when is_binary(TopHash) ->
+            case find_next_node_at_height_from_top_header(Height + 1, State) of
+                not_found ->
+                    %% Not reachable from the current main chain
+                    TopNode = blocks_db_get(TopHash, State),
+                    case find_fork_point(TopNode, Node, State) of
+                        none -> off_chain;
+                        _ForkHash -> error(forks_nyi) %% TODO: This
+                    end;
+                _NextNode ->
+                    %% Since there was a top node, the chain must have been
+                    %% intact even before insertion.
+                    in_chain
+            end
+    end.
 
-find_new_header_top(_Node, State) ->
-    %% TODO: This.
-    State.
+find_fork_point(Node1, Node2, State) ->
+    Height1 = node_height(Node1),
+    Height2 = node_height(Node2),
+    find_fork_point(Node1, Height1, Node2, Height2, State).
+
+find_fork_point(Node, Height, Node, Height,_State) -> Node;
+find_fork_point(_Node1, Height,_Node2, Height,_State) when Height =:= 0 ->
+    not_found;
+find_fork_point(Node1, Height1, Node2, Height2, State) when Height1 > Height2,
+                                                            Height1 > 0 ->
+    PrevHash = prev_hash(Node1),
+    case blocks_db_find(PrevHash, State) of
+        error -> not_found;
+        {ok, NewNode} ->
+            NewHeight = node_height(NewNode),
+            find_fork_point(NewNode, NewHeight, Node2, Height2, State)
+    end;
+find_fork_point(Node1, Height1, Node2, Height2, State) when Height2 >= Height2,
+                                                            Height2 > 0 ->
+    PrevHash = prev_hash(Node2),
+    case blocks_db_find(PrevHash, State) of
+        error -> not_found;
+        {ok, NewNode} ->
+            NewHeight = node_height(NewNode),
+            find_fork_point(Node1, Height1, NewNode, NewHeight, State)
+    end.
+
+find_new_header_top_from_node(Node, State) ->
+    Height = node_height(Node),
+    case blocks_db_find_at_height(Height + 1, State) of
+        [] -> Node;
+        [NextNode] -> find_new_header_top_from_node(NextNode, State);
+        [_|_] -> error(forks_nyi) %% TODO: This
+    end.
 
 %% Precondition: The header chain is assumed to have been updated
 %%               before this function is called, i.e., the choice
@@ -217,8 +271,19 @@ db_find(Key, Store) ->
 db_delete(Key, Store) ->
     dict:erase(Key, Store).
 
-blocks_db_put(#node{hash = Hash} = Node, #{blocks_db := DB} = State) ->
+blocks_db_put(#node{hash = Hash} = Node, State) ->
+    DB = maps:get(blocks_db, State),
     State#{blocks_db => db_put(Hash, Node, DB)}.
+
+blocks_db_find_at_height(Height, #{blocks_db := Store}) ->
+    %% TODO: This is pretty inefficient
+    Fold = fun(_Hash, Node, Acc) ->
+                   case node_height(Node) =:= Height of
+                       true  -> [Node|Acc];
+                       false -> Acc
+                   end
+           end,
+    dict:fold(Fold, [], Store).
 
 blocks_db_find(Key, #{blocks_db := Store}) ->
     db_find(Key, Store).
