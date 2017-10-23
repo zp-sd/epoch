@@ -9,6 +9,8 @@
 
 -export([ insert_block/2
         , insert_header/2
+        , get_block/2
+        , get_header/2
         , new/0
         , top_header/1
         , top_block/1
@@ -44,6 +46,18 @@ insert_block(Block, ?assert_state() = State) ->
 
 insert_header(Block, ?assert_state() = State) ->
     internal_insert(wrap_header(Block), State).
+
+get_block(Hash, ?assert_state() = State) ->
+    case blocks_db_find(Hash, State) of
+        {ok, Internal} -> {ok, export_block(Internal, State)};
+        error -> error
+    end.
+
+get_header(Hash, ?assert_state() = State) ->
+    case blocks_db_find(Hash, State) of
+        {ok, Internal} -> {ok, export_header(Internal)};
+        error -> error
+    end.
 
 %%%===================================================================
 %%% Internal functions
@@ -86,7 +100,10 @@ export_header(#node{type = header, content = H}) -> H;
 export_header(#node{type = block, content = H}) -> aec_blocks:to_header(H).
 
 export_block(#node{type = block, hash = H, content = B}, State) ->
-    add_state_tree_to_block(B, H, State).
+    case add_state_tree_to_block(B, H, State) of
+        {ok, ExportBlock} -> ExportBlock;
+        error -> B
+    end.
 
 %%%-------------------------------------------------------------------
 %%% Handling the state trees
@@ -94,8 +111,8 @@ export_block(#node{type = block, hash = H, content = B}, State) ->
 
 add_state_tree_to_block(Block, Hash, State) ->
     case state_db_find(Hash, State) of
-        {ok, Trees} -> aec_blocks:set_trees(Block, Trees);
-        error -> error({hash_not_in_state_store, Hash})
+        {ok, Trees} -> {ok, aec_blocks:set_trees(Block, Trees)};
+        error -> error
     end.
 
 %%%-------------------------------------------------------------------
