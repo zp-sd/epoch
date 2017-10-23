@@ -33,10 +33,11 @@ new() ->
      , top_header_hash => undefined
      , top_block_hash  => undefined
      , alt_tops => []
-     , state_trees => #{}
+     , state_db => db_new()
      , dangling_prevs => orddict:new()
      }.
 
+top_header(?match_state(top_header_hash := undefined)) -> undefined;
 top_header(?match_state(top_header_hash := X) = State) ->
     export_header(blocks_db_get(X, State)).
 
@@ -46,6 +47,7 @@ top_header_hash(?match_state(top_header_hash := X)) ->
 top_block_hash(?match_state(top_block_hash := X)) ->
     X.
 
+top_block(?match_state(top_block_hash := undefined)) -> undefined;
 top_block(?match_state(top_block_hash := X) = State) ->
     export_block(blocks_db_get(X, State), State).
 
@@ -72,10 +74,10 @@ get_header(Hash, ?assert_state() = State) ->
 %%%===================================================================
 
 get_top_header_hash(#{top_header_hash := H}) -> H.
-set_top_header_hash(H, State) -> State#{top_header_hash => H}.
+set_top_header_hash(H, State) when is_binary(H) -> State#{top_header_hash => H}.
 
 get_top_block_hash(#{top_block_hash := H}) -> H.
-set_top_block_hash(H, State) -> State#{top_block_hash => H}.
+set_top_block_hash(H, State) when is_binary(H) -> State#{top_block_hash => H}.
 
 %%%-------------------------------------------------------------------
 %%% Internal ADT for differing between blocks and headers
@@ -93,15 +95,17 @@ node_height(#node{type = header, content = X}) -> aec_headers:height(X);
 node_height(#node{type = block , content = X}) -> aec_blocks:height(X).
 
 wrap_block(Block) ->
+    {ok, Hash} = aec_headers:hash_header(aec_blocks:to_header(Block)),
     #node{ type = block
          , content = Block
-         , hash = aec_headers:hash_header(aec_blocks:to_header(Block))
+         , hash = Hash
          }.
 
 wrap_header(Header) ->
+    {ok, Hash} = aec_headers:hash_header(Header),
     #node{ type = header
          , content = Header
-         , hash = aec_headers:hash_header(Header)
+         , hash = Hash
          }.
 
 export_header(#node{type = header, content = H}) -> H;
@@ -154,14 +158,16 @@ check_update_after_insert(Node, State) ->
 
 determine_chain_relation(Node, State) ->
     Height   = node_height(Node),
+    Hash     = Node#node.hash,
     PrevHash = prev_hash(Node),
-    case top_header_hash(State) of
+    case get_top_header_hash(State) of
         PrevHash -> new_top;
         undefined when Height > 0 -> off_chain; %% No proper chain yet.
         undefined when Height =:= 0 -> new_top; %% A genesis block. TODO: Should this be checked?
+        Hash -> in_chain; %% This is the top header
         TopHash when is_binary(TopHash), Height =:= 0 ->
             %% A new genesis block. TODO: This
-            error({new_genesis_block, nyi});
+            error(new_genesis_block_nyi);
         TopHash when is_binary(TopHash) ->
             case find_next_node_at_height_from_top_header(Height + 1, State) of
                 not_found ->
