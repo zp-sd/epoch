@@ -7,13 +7,15 @@
 
 -module(aec_chain_state).
 
--export([ insert_block/2
-        , insert_header/2
-        , get_block/2
+-export([ get_block/2
         , get_header/2
+        , insert_block/2
+        , insert_header/2
         , new/0
-        , top_header/1
         , top_block/1
+        , top_block_hash/1
+        , top_header/1
+        , top_header_hash/1
         ]).
 
 %% -opaque(state() :: #{}).
@@ -37,6 +39,12 @@ new() ->
 
 top_header(?match_state(top_header_hash := X) = State) ->
     export_header(blocks_db_get(X, State)).
+
+top_header_hash(?match_state(top_header_hash := X)) ->
+    X.
+
+top_block_hash(?match_state(top_block_hash := X)) ->
+    X.
 
 top_block(?match_state(top_block_hash := X) = State) ->
     export_block(blocks_db_get(X, State), State).
