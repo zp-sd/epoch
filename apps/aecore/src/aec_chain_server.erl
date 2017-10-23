@@ -68,7 +68,8 @@ init(_Args = [GenesisBlock]) ->
     %% Temporary solution till new_chain_state is in place.
     GenesisHeader = aec_blocks:to_header(GenesisBlock),
     {ok, S2} = insert_header(GenesisHeader, new_state()),
-    insert_block(GenesisBlock, S2).
+    {ok, S3} = insert_block(GenesisBlock, S2),
+    {ok, S3}.
       
 
 
@@ -130,8 +131,6 @@ insert_header(Header, State) ->
 top(State) ->
     {ok, aec_chain_state:top_block(State)}.
 
-
-
 get_block(Hash, State) ->
     case aec_chain_state:get_block(Hash, State) of
 	{ok, Res} -> {ok, Res};
@@ -146,21 +145,29 @@ get_block(Hash, State) ->
 %% Should be moved to aec_chain_state.
 difficulty(#{difficulty := D}) -> D.
 
-get_block_by_height(H, #{blocks := Blocks, top_header_hash := Top} = State) ->
-    case ([V || {_, V} <- maps:to_list(Blocks), height(V) =:= H]) of
-	[B] -> {ok, B};
-	_ -> 
-	    case height(top_header(State)) of
-		TH when TH > H ->
-		    {error, {block_not_found, {top_header, Top}}};
-	        TH -> {error, {chain_too_short, 
-			     {{chain_height, TH},
-			      {top_header, Top}}}}
-	    end
+get_block_by_height(H, State) ->
+    HeaderHash = top_header_hash(State),
+    TopHeader = aec_chain_state:top_header(State),
+    CH = aec_headers:height(TopHeader),
+    if CH < H ->
+	    {error, {chain_too_short, 
+		     {{chain_height, CH},
+		      {top_header, HeaderHash}}}};
+       CH > H ->
+	    find_block_at_height(H, aec_headers:prev_hash(TopHeader), State);
+       true -> 
+	    get_block(HeaderHash, State)
     end.
 
-height(#block{} = B) -> aec_blocks:height(B);
-height(#header{} = H) ->  aec_headers:height(H).
+find_block_at_height(H, HeaderHash, State) ->
+    Header = aec_chain_state:get_header(HeaderHash, State),
+    Current = aec_headers:height(Header),
+    if Current > H ->
+	    find_block_at_height(H, aec_headers:prev_hash(Header), State);
+       Current =:= H -> 
+	    get_block(HeaderHash, State)
+    end.
+
 
 top_header_hash(#{top_header_hash := Top}) -> Top.
 
