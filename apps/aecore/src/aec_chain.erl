@@ -120,7 +120,6 @@
 start_link(GenesisBlock) ->
     Args = [GenesisBlock],
     aec_chain_server:start_link(GenesisBlock),
-    timer:sleep(1000),
     gen_server:start_link({local, ?SERVER}, ?MODULE, Args, []).
 
 stop() ->
