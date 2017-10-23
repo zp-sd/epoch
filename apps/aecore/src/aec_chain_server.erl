@@ -45,7 +45,7 @@
 -include("blocks.hrl").
 
 -define(SERVER, ?MODULE).
--define(DEFAULT_CALL_TIMEOUT, infinity). %% For synchronous persistence and for forced chain (fork).
+-define(DEFAULT_CALL_TIMEOUT, infinity).
 
 %%%===================================================================
 %%% API -  the main API for the server is in aec_chain.
@@ -118,41 +118,37 @@ code_change(_OldVsn, State, _Extra) ->
 %%% Internal functions
 %%%===================================================================
 
-%% WARNING! WARNING! WARNING! WARNING! WARNING! WARNING! WARNING! 
-%% This code is just a placeholder for aec_chain_state.
-%% It assumes that an header always is inserted before a block.
-
 new_state() ->
-    #{ blocks => #{}
-     , difficulty => 0.0
-     , top =>  undefiend
-     , top_header => undefined}.
+    aec_chain_state:new().
 
-insert_block(Block, #{blocks := Blocks, difficulty := TD} = State) ->
-    Header = aec_blocks:to_header(Block),
-    D = aec_headers:difficulty(Header),
-    {ok, Hash} = aec_headers:hash_header(Header),
-    
-    {ok, State#{blocks => maps:put(Hash, Block, Blocks)
-	       , top => Hash
-	       , difficulty := TD + D}}.
+insert_block(Block, State) ->
+    {ok, aec_chain_state:insert_block(Block, State)}.
 	
-insert_header(Header, #{blocks := Blocks} = State) ->
-    {ok, Hash} = aec_headers:hash_header(Header),
-    {ok, State#{blocks => maps:put(Hash, Header, Blocks),
-		top_header => Hash}}.
+insert_header(Header, State) ->
+    {ok, aec_chain_state:insert_header(Header, State)}.
 
-top(#{top := Top, blocks := Blocks}) ->
-    maps:get(Top, Blocks).
+top(State) ->
+    {ok, aec_chain_state:top_block(State)}.
 
+
+
+get_block(Hash, State) ->
+    case aec_chain_state:get_block(Hash, State) of
+	{ok, Res} -> {ok, Res};
+	error ->
+	    Top = top_header_hash(State),
+	    {error, {block_not_found, {top_header, Top}}}
+    end.
+
+
+%% WARNING WARNING WARNING WARNING WARNING WARNING
+%% Temporary implementation beyond this point.
+%% Should be moved to aec_chain_state.
 difficulty(#{difficulty := D}) -> D.
 
-get_block(Hash, #{blocks := Blocks}) ->
-    maps:get(Hash, Blocks).
-
-get_block_by_height(H, #{blocks := Blocks, top_header := Top} = State) ->
+get_block_by_height(H, #{blocks := Blocks, top_header_hash := Top} = State) ->
     case ([V || {_, V} <- maps:to_list(Blocks), height(V) =:= H]) of
-	[B] -> B;
+	[B] -> {ok, B};
 	_ -> 
 	    case height(top_header(State)) of
 		TH when TH > H ->
@@ -166,13 +162,15 @@ get_block_by_height(H, #{blocks := Blocks, top_header := Top} = State) ->
 height(#block{} = B) -> aec_blocks:height(B);
 height(#header{} = H) ->  aec_headers:height(H).
 
-top_header(#{top_header := Top} = State) ->
+top_header_hash(#{top_header_hash := Top}) -> Top.
+
+top_header(#{top_header_hash := Top} = State) ->
     get_header(Top, State).
 
 get_header(Hash, #{top_header := Top} = State) ->
     try get_block(Hash, State) of
-	#block{} = B ->  aec_blocks:to_header(B);
-	Header -> Header
+	#block{} = B ->  {ok, aec_blocks:to_header(B)};
+	Header -> {ok, Header}
     catch _:_ -> {error, {header_not_found, {top_header, Top}}}
     end.
 
@@ -180,6 +178,6 @@ get_header(Hash, #{top_header := Top} = State) ->
 
 get_header_by_height(H, State) ->
     case get_block_by_height(H, State) of
-	#block{} = B ->  aec_blocks:to_header(B);
-	Header -> Header
+	#block{} = B ->  {ok, aec_blocks:to_header(B)};
+	Header -> {ok, Header}
     end.
